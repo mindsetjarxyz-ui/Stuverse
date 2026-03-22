@@ -8,10 +8,7 @@ export default defineConfig(({mode}) => {
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      // Supports both GEMINI_API_KEY and VITE_GEMINI_API_KEY for Vercel compatibility
-      'process.env.GEMINI_API_KEY': JSON.stringify(
-        env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY
-      ),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
     resolve: {
       alias: {

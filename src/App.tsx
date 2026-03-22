@@ -6,6 +6,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Landing } from './pages/Landing';
+import { Verification } from './pages/Verification';
 import { Dashboard } from './pages/Dashboard';
 import { StudyBuddy } from './pages/StudyBuddy';
 import { Summarizer } from './pages/Summarizer';
@@ -20,6 +21,7 @@ export default function App() {
       <Router>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/verification" element={<Verification />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
