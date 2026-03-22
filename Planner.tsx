@@ -1,16 +1,26 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-const firebaseConfig = {
-  apiKey: "AIzaSyDjiQmzuLURTSeQK_qWu0ZWvJlsgvSle_U",
-  authDomain: "stuverse-31756.firebaseapp.com",
-  projectId: "stuverse-31756",
-  storageBucket: "stuverse-31756.firebasestorage.app",
-  messagingSenderId: "283807027196",
-  appId: "1:283807027196:web:efc9d8aa2f7d14f9fcec79",
-  measurementId: "G-4X7VSQL3B2"
-};
+import {StrictMode} from 'react';
+import {createRoot} from 'react-dom/client';
+import App from './App.tsx';
+import './index.css';
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Fix for "Cannot set property fetch of #<Window> which has only a getter"
+// This happens in some iframe environments where window.fetch is read-only.
+try {
+  const originalFetch = window.fetch;
+  Object.defineProperty(window, 'fetch', {
+    configurable: true,
+    enumerable: true,
+    get: () => originalFetch,
+    set: () => {
+      // Silently ignore attempts to overwrite fetch in read-only environments
+    }
+  });
+} catch (e) {
+  // Silently ignore patching errors
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
