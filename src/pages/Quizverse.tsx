@@ -6,7 +6,10 @@ import { useAppStore } from '../store/useAppStore';
 import { generateQuiz } from '../services/ai';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { cn } from '../utils/cn';
+import { cn } from '../lib/utils';
+import { db } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Question {
   question: string;
@@ -17,11 +20,13 @@ interface Question {
 
 export const Quizverse: React.FC = () => {
   const { t } = useTranslation();
-  const { plan, useCredits, addRecentTool, updateQuizAccuracy, showAlert } = useAppStore();
+  const { user } = useAuth();
+  const { plan, credits, useCredits, addRecentTool, updateQuizAccuracy, showAlert } = useAppStore();
   
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState(15);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [language, setLanguage] = useState('English');
   
   const [quizState, setQuizState] = useState<'setup' | 'generating' | 'playing' | 'results'>('setup');
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -37,20 +42,42 @@ export const Quizverse: React.FC = () => {
   }, [addRecentTool]);
 
   const handleGenerate = async () => {
-    if (!topic.trim()) return;
+    if (!topic.trim() || !user) return;
 
-    const cost = 1;
+    const cost = 2;
     
-    if (!useCredits(cost)) {
+    if (credits < cost) {
       showAlert(t('insufficientCredits'));
       return;
     }
 
     setQuizState('generating');
     try {
-      const generatedQuestions = await generateQuiz(topic, count, difficulty);
+      const generatedQuestions = await generateQuiz(topic, count, difficulty, language);
       if (generatedQuestions && generatedQuestions.length > 0) {
-        setQuestions(generatedQuestions);
+        // Deduct credits in Firestore
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const currentCredits = userSnap.data().credits || 0;
+          await updateDoc(userRef, {
+            credits: Math.max(0, currentCredits - cost)
+          });
+          useCredits(cost); // Sync local state
+        }
+
+        const shuffledQuestions = generatedQuestions.map((q: Question) => {
+          const optionsWithOriginalIndex = q.options.map((opt, idx) => ({ opt, idx }));
+          const shuffled = [...optionsWithOriginalIndex].sort(() => Math.random() - 0.5);
+          const newCorrectIndex = shuffled.findIndex(s => s.idx === q.correctAnswerIndex);
+          return {
+            ...q,
+            options: shuffled.map(s => s.opt),
+            correctAnswerIndex: newCorrectIndex
+          };
+        });
+
+        setQuestions(shuffledQuestions);
         setQuizState('playing');
         setCurrentIndex(0);
         setScore(0);
@@ -77,13 +104,29 @@ export const Quizverse: React.FC = () => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(i => i + 1);
       setSelectedAnswer(null);
       setShowExplanation(false);
     } else {
       updateQuizAccuracy(score, questions.length);
+      
+      // Save score to Firestore
+      if (user) {
+        try {
+          await addDoc(collection(db, 'quiz_scores'), {
+            userId: user.uid,
+            topic,
+            score,
+            total: questions.length,
+            timestamp: serverTimestamp()
+          });
+        } catch (error) {
+          console.error('Error saving quiz score:', error);
+        }
+      }
+      
       setQuizState('results');
     }
   };
@@ -191,6 +234,26 @@ export const Quizverse: React.FC = () => {
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Output Language</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {['English', 'Bengali', 'Spanish', 'French', 'German', 'Hindi', 'Arabic', 'Chinese'].map((lang) => (
+                    <button
+                      key={lang}
+                      onClick={() => setLanguage(lang)}
+                      className={cn(
+                        "py-2 px-2 rounded-xl text-xs font-medium transition-all border",
+                        language === lang 
+                          ? "bg-white/10 border-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
+                          : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20"
+                      )}
+                    >
+                      {lang}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Button 
                   className="w-full bg-white text-black hover:bg-gray-200 border-none"
                   onClick={handleGenerate}
@@ -199,7 +262,7 @@ export const Quizverse: React.FC = () => {
                   <Play className="w-5 h-5 mr-2" />
                   Generate Quiz
                 </Button>
-                <p className="text-[10px] text-gray-500 text-center">Generation consumes 1 credit</p>
+                <p className="text-[10px] text-gray-500 text-center">Generation consumes 2 credits</p>
               </div>
             </Card>
           </motion.div>

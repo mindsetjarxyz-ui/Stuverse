@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export type Plan = 'free' | 'pro';
 export type Language = 'en' | 'bn' | 'hi' | 'es';
@@ -25,6 +27,7 @@ interface AppState {
   setLanguage: (lang: Language) => void;
   addRecentTool: (tool: string) => void;
   updateQuizAccuracy: (score: number, total: number) => void;
+  syncWithFirestore: (userId: string) => Promise<void>;
   
   showConfirm: (message: string, onConfirm: () => void) => void;
   showAlert: (message: string) => void;
@@ -91,6 +94,36 @@ export const useAppStore = create<AppState>()(
           quizAccuracy: Math.round(((state.quizAccuracy * state.totalQuizzesTaken) + (score / total * 100)) / newTotal)
         };
       }),
+
+      syncWithFirestore: async (userId) => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            const today = new Date().toISOString().split('T')[0];
+            const lastRenewal = data.lastRenewalDate ? new Date(data.lastRenewalDate.seconds * 1000).toISOString().split('T')[0] : '';
+            
+            let currentCredits = data.credits ?? DAILY_FREE_CREDITS;
+            let currentPlan = data.plan ?? 'free';
+
+            if (today !== lastRenewal) {
+              currentCredits = currentPlan === 'pro' ? DAILY_PRO_CREDITS : DAILY_FREE_CREDITS;
+              await updateDoc(doc(db, 'users', userId), {
+                credits: currentCredits,
+                lastRenewalDate: serverTimestamp()
+              });
+            }
+
+            set({
+              credits: currentCredits,
+              plan: currentPlan as Plan,
+              lastClaimDate: today
+            });
+          }
+        } catch (error) {
+          console.error('Error syncing with Firestore:', error);
+        }
+      },
       
       showConfirm: (message, onConfirm) => set({ confirmDialog: { isOpen: true, message, onConfirm } }),
       showAlert: (message) => set({ alertDialog: { isOpen: true, message } }),

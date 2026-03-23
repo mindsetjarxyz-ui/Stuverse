@@ -7,7 +7,7 @@ import { useAppStore } from '../store/useAppStore';
 import { analyzeDocumentStream, generateCompletionStream } from '../services/ai';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { cn } from '../utils/cn';
+import { cn } from '../lib/utils';
 
 export const Summarizer: React.FC = () => {
   const { t } = useTranslation();

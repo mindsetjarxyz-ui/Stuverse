@@ -6,12 +6,12 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Landing } from './pages/Landing';
-import { Verification } from './pages/Verification';
 import { Dashboard } from './pages/Dashboard';
 import { StudyBuddy } from './pages/StudyBuddy';
 import { Summarizer } from './pages/Summarizer';
 import { Quizverse } from './pages/Quizverse';
 import { Planner } from './pages/Planner';
+import { VoiceToNotes } from './pages/VoiceToNotes';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -21,7 +21,6 @@ export default function App() {
       <Router>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/verification" element={<Verification />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
@@ -29,6 +28,7 @@ export default function App() {
               <Route path="/summarizer" element={<Summarizer />} />
               <Route path="/quiz" element={<Quizverse />} />
               <Route path="/planner" element={<Planner />} />
+              <Route path="/voice-to-notes" element={<VoiceToNotes />} />
             </Route>
           </Route>
         </Routes>

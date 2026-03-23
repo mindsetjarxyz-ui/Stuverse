@@ -1,14 +1,50 @@
 import { useAppStore } from '../store/useAppStore';
 import { locales } from '../locales';
 import { motion } from 'motion/react';
-import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight } from 'lucide-react';
+import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight, Trophy, Clock, TrendingUp, Mic } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useState } from 'react';
+import { db } from '../lib/firebase';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+
+interface QuizScore {
+  id: string;
+  topic: string;
+  score: number;
+  total: number;
+  timestamp: any;
+}
 
 export function Dashboard() {
   const { language, plan, credits } = useAppStore();
   const t = locales[language];
   const { user } = useAuth();
+  const [recentScores, setRecentScores] = useState<QuizScore[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const scoresRef = collection(db, 'quiz_scores');
+    const q = query(
+      scoresRef, 
+      where('userId', '==', user.uid), 
+      orderBy('timestamp', 'desc'), 
+      limit(5)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const scores = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as QuizScore[];
+      setRecentScores(scores);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const tools = [
     {
@@ -46,6 +82,15 @@ export function Dashboard() {
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',
       border: 'border-purple-400/20'
+    },
+    {
+      to: '/voice-to-notes',
+      icon: Mic,
+      title: t.voice_to_notes,
+      desc: 'Transcribe lecture audio into structured, bullet-point notes.',
+      color: 'text-rose-400',
+      bg: 'bg-rose-400/10',
+      border: 'border-rose-400/20'
     }
   ];
 
@@ -64,30 +109,75 @@ export function Dashboard() {
         </p>
       </motion.header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {tools.map((tool, i) => (
-          <motion.div
-            key={tool.to}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.1 }}
-          >
-            <Link 
-              to={tool.to}
-              className={`group block p-6 glass-panel hover:bg-glass-hover transition-all duration-300 relative overflow-hidden`}
-            >
-              <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity ${tool.bg}`}></div>
-              <div className="flex items-start justify-between relative z-10">
-                <div className={`w-12 h-12 rounded-2xl ${tool.bg} flex items-center justify-center mb-4 border ${tool.border}`}>
-                  <tool.icon className={`w-6 h-6 ${tool.color}`} />
-                </div>
-                <ArrowRight className="w-5 h-5 text-gray-500 group-hover:text-gray-300 group-hover:translate-x-1 transition-all" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Tools */}
+        <div className="lg:col-span-2 space-y-6">
+          <h2 className="text-xl font-heading font-semibold text-white flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {tools.map((tool, i) => (
+              <motion.div
+                key={tool.to}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <Link 
+                  to={tool.to}
+                  className={`group block p-5 glass-panel hover:bg-glass-hover transition-all duration-300 relative overflow-hidden`}
+                >
+                  <div className={`absolute -right-10 -top-10 w-24 h-24 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity ${tool.bg}`}></div>
+                  <div className="flex items-start justify-between relative z-10">
+                    <div className={`w-10 h-10 rounded-xl ${tool.bg} flex items-center justify-center mb-3 border ${tool.border}`}>
+                      <tool.icon className={`w-5 h-5 ${tool.color}`} />
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <h3 className="text-lg font-heading font-medium text-white mb-1 relative z-10">{tool.title}</h3>
+                  <p className="text-gray-400 text-xs leading-relaxed relative z-10">{tool.desc}</p>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Activity / Scores */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-heading font-semibold text-white flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-amber-400" />
+            Recent Quiz Scores
+          </h2>
+          <div className="glass-panel p-6 space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Clock className="w-6 h-6 text-gray-500 animate-spin" />
               </div>
-              <h3 className="text-xl font-heading font-medium text-white mb-2 relative z-10">{tool.title}</h3>
-              <p className="text-gray-400 text-sm leading-relaxed relative z-10">{tool.desc}</p>
-            </Link>
-          </motion.div>
-        ))}
+            ) : recentScores.length > 0 ? (
+              recentScores.map((score) => (
+                <div key={score.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{score.topic}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {score.timestamp?.toDate().toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-emerald-400">{score.score}/{score.total}</p>
+                    <p className="text-[10px] text-gray-500">{Math.round((score.score / score.total) * 100)}%</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <CheckSquare className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">No quizzes taken yet.</p>
+                <Link to="/quiz" className="text-xs text-white hover:underline mt-2 inline-block">Start your first quiz</Link>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

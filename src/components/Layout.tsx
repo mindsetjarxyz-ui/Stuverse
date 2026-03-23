@@ -16,7 +16,7 @@ export function Layout() {
           <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center border border-border-glass">
             <span className="text-white font-bold">S</span>
           </div>
-          <span className="text-lg font-heading font-semibold text-white">Stuverse</span>
+          <span className="text-lg font-heading font-semibold text-white">Studygen AI</span>
         </div>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}

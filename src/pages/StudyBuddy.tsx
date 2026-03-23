@@ -6,7 +6,10 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { analyzeDocumentStream, generateCompletionStream } from '../services/ai';
 import { Button } from '../components/ui/Button';
-import { cn } from '../utils/cn';
+import { cn } from '../lib/utils';
+import { db } from '../lib/firebase';
+import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, limit } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Message {
   id: string;
@@ -17,10 +20,10 @@ interface Message {
 
 export const StudyBuddy: React.FC = () => {
   const { t } = useTranslation();
-  const { useCredits, addRecentTool, showAlert } = useAppStore();
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', role: 'ai', content: 'Hello! I am your Study Buddy. Ask me anything, or upload a PDF/Image for analysis.' }
-  ]);
+  const { user } = useAuth();
+  const { credits, useCredits, addRecentTool, showAlert } = useAppStore();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatId, setChatId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; type: 'pdf' | 'image'; data: string; mimeType: string } | null>(null);
@@ -30,6 +33,54 @@ export const StudyBuddy: React.FC = () => {
   useEffect(() => {
     addRecentTool('Study Buddy');
   }, [addRecentTool]);
+
+  // Load or create chat session
+  useEffect(() => {
+    if (!user) return;
+
+    const chatsRef = collection(db, 'chats');
+    const q = query(chatsRef, where('userId', '==', user.uid), orderBy('updatedAt', 'desc'), limit(1));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const latestChat = snapshot.docs[0];
+        setChatId(latestChat.id);
+      } else {
+        // Create initial chat session
+        addDoc(chatsRef, {
+          userId: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          title: 'New Chat'
+        }).then(docRef => setChatId(docRef.id));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Load messages for current chat
+  useEffect(() => {
+    if (!chatId) return;
+
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Message[];
+      
+      if (msgs.length === 0) {
+        setMessages([{ id: 'welcome', role: 'ai', content: 'Hello! I am your Study Buddy. Ask me anything, or upload a PDF/Image for analysis.' }]);
+      } else {
+        setMessages(msgs);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [chatId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,49 +105,90 @@ export const StudyBuddy: React.FC = () => {
 
   const handleSend = async () => {
     if (!input.trim() && !selectedFile) return;
+    if (!user || !chatId) return;
 
     const cost = 1;
     
-    if (!useCredits(cost)) {
+    if (credits < cost) {
       showAlert(t('insufficientCredits'));
       return;
     }
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input,
-      file: selectedFile || undefined
-    };
+    const promptText = input.trim();
+    const currentFile = selectedFile;
 
-    setMessages(prev => [...prev, userMsg]);
+    // Deduct credits in Firestore
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const currentCredits = userSnap.data().credits || 0;
+      await updateDoc(userRef, {
+        credits: Math.max(0, currentCredits - cost)
+      });
+      useCredits(cost); // Sync local state
+    }
+
+    // Save user message to Firestore
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    await addDoc(messagesRef, {
+      role: 'user',
+      content: promptText || 'Analyze this document.',
+      file: currentFile || null,
+      timestamp: serverTimestamp()
+    });
+
+    // Update chat title if it's the first message
+    if (messages.length <= 1 && promptText) {
+      await updateDoc(doc(db, 'chats', chatId), {
+        title: promptText.slice(0, 30) + (promptText.length > 30 ? '...' : ''),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await updateDoc(doc(db, 'chats', chatId), {
+        updatedAt: serverTimestamp()
+      });
+    }
+
     setInput('');
     setSelectedFile(null);
     setIsTyping(true);
 
-    const aiMsgId = (Date.now() + 1).toString();
-    setMessages(prev => [...prev, { id: aiMsgId, role: 'ai', content: '' }]);
+    // Prepare history for Gemini
+    const history = messages
+      .filter(m => m.id !== 'welcome')
+      .map(m => ({
+        role: m.role === 'user' ? 'user' as const : 'model' as const,
+        parts: [{ text: m.content }]
+      }));
 
     try {
       let stream;
-      const promptText = input || 'Analyze this document.';
-      
-      if (userMsg.file) {
-        stream = analyzeDocumentStream(userMsg.file.data, userMsg.file.mimeType, promptText);
+      if (currentFile) {
+        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history);
       } else {
-        stream = generateCompletionStream(promptText);
+        stream = generateCompletionStream(promptText, history);
       }
 
+      let fullResponse = '';
       for await (const chunk of stream) {
-        setMessages(prev => prev.map(msg => 
-          msg.id === aiMsgId ? { ...msg, content: msg.content + chunk } : msg
-        ));
+        fullResponse += chunk;
+        // We don't update local state here because onSnapshot will handle it once we save the final message
       }
+
+      // Save AI response to Firestore
+      await addDoc(messagesRef, {
+        role: 'ai',
+        content: fullResponse,
+        timestamp: serverTimestamp()
+      });
+
     } catch (error) {
       console.error(error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiMsgId ? { ...msg, content: 'Sorry, I encountered an error processing your request.' } : msg
-      ));
+      await addDoc(messagesRef, {
+        role: 'ai',
+        content: 'Sorry, I encountered an error processing your request.',
+        timestamp: serverTimestamp()
+      });
     } finally {
       setIsTyping(false);
     }

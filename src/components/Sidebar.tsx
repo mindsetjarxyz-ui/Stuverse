@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { locales } from '../locales';
-import { BookOpen, MessageSquare, FileText, CheckSquare, Calendar, Zap, Globe, LogOut } from 'lucide-react';
+import { BookOpen, MessageSquare, FileText, CheckSquare, Calendar, Zap, Globe, LogOut, Mic } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion } from 'motion/react';
@@ -27,6 +27,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     { to: '/summarizer', icon: FileText, label: t.summarizer },
     { to: '/quiz', icon: CheckSquare, label: t.quiz_generator },
     { to: '/planner', icon: Calendar, label: t.study_planner },
+    { to: '/voice-to-notes', icon: Mic, label: t.voice_to_notes },
   ];
 
   return (

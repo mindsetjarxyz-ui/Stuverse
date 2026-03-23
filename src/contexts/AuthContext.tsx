@@ -22,6 +22,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  resendVerification: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -54,7 +55,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, pass: string) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      await sendEmailVerification(userCredential.user);
       
       // Save user to Firestore
       await setDoc(doc(db, 'users', userCredential.user.uid), {
@@ -110,8 +110,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resendVerification = async () => {
+    if (auth.currentUser) {
+      await sendEmailVerification(auth.currentUser);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signInWithGoogle, logout, refreshUser, resendVerification }}>
       {!loading && children}
     </AuthContext.Provider>
   );
