@@ -12,6 +12,7 @@ import { Summarizer } from './pages/Summarizer';
 import { Quizverse } from './pages/Quizverse';
 import { Planner } from './pages/Planner';
 import { VoiceToNotes } from './pages/VoiceToNotes';
+import { Pricing } from './pages/Pricing';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -29,6 +30,7 @@ export default function App() {
               <Route path="/quiz" element={<Quizverse />} />
               <Route path="/planner" element={<Planner />} />
               <Route path="/voice-to-notes" element={<VoiceToNotes />} />
+              <Route path="/pricing" element={<Pricing />} />
             </Route>
           </Route>
         </Routes>

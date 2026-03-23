@@ -1,7 +1,7 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { locales } from '../locales';
-import { BookOpen, MessageSquare, FileText, CheckSquare, Calendar, Zap, Globe, LogOut, Mic } from 'lucide-react';
+import { BookOpen, MessageSquare, FileText, CheckSquare, Calendar, Zap, Globe, LogOut, Mic, CreditCard } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion } from 'motion/react';
@@ -11,6 +11,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { language, plan, credits, setLanguage } = useAppStore();
   const t = locales[language];
   const { logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
@@ -28,6 +29,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     { to: '/quiz', icon: CheckSquare, label: t.quiz_generator },
     { to: '/planner', icon: Calendar, label: t.study_planner },
     { to: '/voice-to-notes', icon: Mic, label: t.voice_to_notes },
+    { to: '/pricing', icon: CreditCard, label: 'Pricing' },
   ];
 
   return (
@@ -93,7 +95,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         {plan === 'free' && (
           <button 
             onClick={() => {
-              window.location.href = '/#pricing';
+              navigate('/pricing');
               if (onClose) onClose();
             }}
             className="w-full py-2.5 px-4 glass-pill text-white text-sm font-semibold hover:text-white transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]"
@@ -105,7 +107,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         {plan === 'pro' && (
           <button 
             onClick={() => {
-              window.location.href = '/#pricing';
+              navigate('/pricing');
               if (onClose) onClose();
             }}
             className="w-full py-2.5 px-4 glass-pill text-white text-sm font-semibold hover:text-white transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]"

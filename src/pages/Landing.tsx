@@ -72,11 +72,19 @@ export function Landing() {
   };
 
   const handleProUpgrade = () => {
-    window.open('https://buy.stripe.com/test_dummy', '_blank');
+    if (user) {
+      navigate('/pricing');
+    } else {
+      setShowAuthModal(true);
+    }
   };
 
   const handlePlusUpgrade = () => {
-    window.open('https://buy.stripe.com/test_plus', '_blank');
+    if (user) {
+      navigate('/pricing');
+    } else {
+      setShowAuthModal(true);
+    }
   };
 
   const features = [

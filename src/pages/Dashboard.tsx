@@ -1,7 +1,7 @@
 import { useAppStore } from '../store/useAppStore';
 import { locales } from '../locales';
 import { motion } from 'motion/react';
-import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight, Trophy, Clock, TrendingUp, Mic } from 'lucide-react';
+import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight, Trophy, Clock, TrendingUp, Mic, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useEffect, useState } from 'react';
@@ -101,12 +101,25 @@ export function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-12"
       >
-        <h1 className="text-4xl font-heading font-semibold tracking-tight text-white mb-2">
-          Welcome back{user?.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}
-        </h1>
-        <p className="text-gray-400 text-lg">
-          You have <span className="text-emerald-400 font-medium">{credits} credits</span> remaining today on your <span className="capitalize text-gray-200 font-medium">{plan === 'free' ? t.free_plan : plan === 'pro' ? t.pro_plan : t.plus_plan}</span>.
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-heading font-semibold tracking-tight text-white mb-2">
+              Welcome back{user?.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}
+            </h1>
+            <p className="text-gray-400 text-lg">
+              You have <span className="text-emerald-400 font-medium">{credits} credits</span> remaining today on your <span className="capitalize text-gray-200 font-medium">{plan === 'free' ? t.free_plan : plan === 'pro' ? t.pro_plan : t.plus_plan}</span>.
+            </p>
+          </div>
+          {plan !== 'plus' && (
+            <Link 
+              to="/pricing"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]"
+            >
+              <Zap className="w-4 h-4 text-amber-400" />
+              Upgrade Plan
+            </Link>
+          )}
+        </div>
       </motion.header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
