@@ -80,12 +80,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-heading font-semibold text-white">{credits}</span>
-            <span className="text-xs text-gray-500">/ {plan === 'pro' ? 200 : 50}</span>
+            <span className="text-xs text-gray-500">/ {plan === 'plus' ? 500 : plan === 'pro' ? 200 : 80}</span>
           </div>
           <div className="mt-3 w-full bg-bg-secondary rounded-full h-1.5 overflow-hidden">
             <div 
               className="bg-emerald-400 h-1.5 rounded-full transition-all duration-500" 
-              style={{ width: `${(credits / (plan === 'pro' ? 200 : 50)) * 100}%` }}
+              style={{ width: `${(credits / (plan === 'plus' ? 500 : plan === 'pro' ? 200 : 80)) * 100}%` }}
             />
           </div>
         </div>
@@ -93,12 +93,24 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         {plan === 'free' && (
           <button 
             onClick={() => {
-              window.open('https://buy.stripe.com/test_dummy', '_blank');
+              window.location.href = '/#pricing';
               if (onClose) onClose();
             }}
             className="w-full py-2.5 px-4 glass-pill text-white text-sm font-semibold hover:text-white transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]"
           >
             {t.upgrade}
+          </button>
+        )}
+
+        {plan === 'pro' && (
+          <button 
+            onClick={() => {
+              window.location.href = '/#pricing';
+              if (onClose) onClose();
+            }}
+            className="w-full py-2.5 px-4 glass-pill text-white text-sm font-semibold hover:text-white transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]"
+          >
+            Upgrade to Plus
           </button>
         )}
 
@@ -114,6 +126,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           >
             <option value="en" className="bg-bg-secondary">EN</option>
             <option value="bn" className="bg-bg-secondary">BN</option>
+            <option value="hi" className="bg-bg-secondary">HI</option>
           </select>
         </div>
         

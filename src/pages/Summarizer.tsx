@@ -12,7 +12,7 @@ import { cn } from '../lib/utils';
 
 export const Summarizer: React.FC = () => {
   const { t } = useTranslation();
-  const { useCredits, addRecentTool, showAlert } = useAppStore();
+  const { useCredits, addRecentTool, showAlert, language } = useAppStore();
   
   const [mode, setMode] = useState<'text' | 'pdf'>('text');
   const [summaryType, setSummaryType] = useState<'quick' | 'deep'>('quick');
@@ -23,6 +23,8 @@ export const Summarizer: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+
+  const languageName = language === 'bn' ? 'Bengali' : language === 'hi' ? 'Hindi' : 'English';
 
   useEffect(() => {
     addRecentTool('Summarizer');
@@ -74,9 +76,9 @@ export const Summarizer: React.FC = () => {
     try {
       let stream;
       if (mode === 'pdf' && selectedFile) {
-        stream = analyzeDocumentStream(selectedFile.data, selectedFile.mimeType, prompt);
+        stream = analyzeDocumentStream(selectedFile.data, selectedFile.mimeType, prompt, [], languageName);
       } else {
-        stream = generateCompletionStream(`${prompt}\n\nContent:\n${textInput}`);
+        stream = generateCompletionStream(`${prompt}\n\nContent:\n${textInput}`, [], languageName);
       }
 
       for await (const chunk of stream) {

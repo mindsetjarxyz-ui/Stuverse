@@ -21,13 +21,22 @@ interface Question {
 export const Quizverse: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { plan, credits, useCredits, addRecentTool, updateQuizAccuracy, showAlert } = useAppStore();
+  const { plan, credits, useCredits, addRecentTool, updateQuizAccuracy, showAlert, language: storeLanguage } = useAppStore();
   
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState(15);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [language, setLanguage] = useState('English');
   
+  useEffect(() => {
+    const langMap: Record<string, string> = {
+      en: 'English',
+      bn: 'Bengali',
+      hi: 'Hindi'
+    };
+    setLanguage(langMap[storeLanguage] || 'English');
+  }, [storeLanguage]);
+
   const [quizState, setQuizState] = useState<'setup' | 'generating' | 'playing' | 'results'>('setup');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -35,7 +44,7 @@ export const Quizverse: React.FC = () => {
   const [score, setScore] = useState(0);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  const maxQuestions = plan === 'pro' ? 30 : 15;
+  const maxQuestions = plan === 'free' ? 15 : 50;
 
   useEffect(() => {
     addRecentTool('Quizverse');
@@ -192,20 +201,20 @@ export const Quizverse: React.FC = () => {
                   <button
                     onClick={() => {
                       if (plan === 'free') {
-                        showAlert('Upgrade to Pro to generate 30 questions.');
+                        showAlert('Upgrade to Pro to generate 50 questions.');
                         return;
                       }
-                      setCount(30);
+                      setCount(50);
                     }}
                     className={cn(
                       "py-2 px-4 rounded-xl text-sm font-medium transition-all border",
-                      count === 30 
+                      count === 50 
                         ? "bg-white/10 border-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
                         : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20",
                       plan === 'free' && "opacity-50 cursor-not-allowed"
                     )}
                   >
-                    30 Questions
+                    50 Questions
                   </button>
                 </div>
                 {plan === 'free' && (

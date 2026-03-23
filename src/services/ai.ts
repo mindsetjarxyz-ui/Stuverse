@@ -2,11 +2,11 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export const generateCompletion = async (prompt: string, model = 'gemini-3.1-flash-lite-preview') => {
+export const generateCompletion = async (prompt: string, language = 'English', model = 'gemini-3.1-flash-lite-preview') => {
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: prompt,
+      contents: `${prompt}\n\nIMPORTANT: Please respond in ${language}.`,
     });
     return response.text;
   } catch (error) {
@@ -15,13 +15,13 @@ export const generateCompletion = async (prompt: string, model = 'gemini-3.1-fla
   }
 };
 
-export const generateCompletionStream = async function* (prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], model = 'gemini-3.1-flash-lite-preview') {
+export const generateCompletionStream = async function* (prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', model = 'gemini-3.1-flash-lite-preview') {
   try {
     const responseStream = await ai.models.generateContentStream({
       model,
       contents: [
         ...history,
-        { role: 'user', parts: [{ text: prompt }] }
+        { role: 'user', parts: [{ text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }] }
       ]
     });
     for await (const chunk of responseStream) {
@@ -68,14 +68,14 @@ export const generateQuiz = async (topic: string, count: number, difficulty: str
   }
 };
 
-export const analyzeDocument = async (fileData: string, mimeType: string, prompt: string) => {
+export const analyzeDocument = async (fileData: string, mimeType: string, prompt: string, language = 'English') => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',
       contents: {
         parts: [
           { inlineData: { data: fileData, mimeType } },
-          { text: prompt }
+          { text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }
         ]
       }
     });
@@ -86,7 +86,7 @@ export const analyzeDocument = async (fileData: string, mimeType: string, prompt
   }
 };
 
-export const analyzeDocumentStream = async function* (fileData: string, mimeType: string, prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = []) {
+export const analyzeDocumentStream = async function* (fileData: string, mimeType: string, prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English') {
   try {
     const responseStream = await ai.models.generateContentStream({
       model: 'gemini-3.1-flash-lite-preview',
@@ -94,7 +94,7 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
         parts: [
           ...history.flatMap(h => h.parts),
           { inlineData: { data: fileData, mimeType } },
-          { text: prompt }
+          { text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }
         ]
       }
     });
@@ -107,14 +107,14 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
   }
 };
 
-export const transcribeAudio = async (audioData: string, mimeType: string) => {
+export const transcribeAudio = async (audioData: string, mimeType: string, language = 'English') => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',
       contents: {
         parts: [
           { inlineData: { data: audioData, mimeType } },
-          { text: "Please transcribe this lecture audio and then provide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section." }
+          { text: `Please transcribe this lecture audio and then provide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.` }
         ]
       }
     });

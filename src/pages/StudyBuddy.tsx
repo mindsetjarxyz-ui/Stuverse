@@ -22,7 +22,7 @@ interface Message {
 export const StudyBuddy: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { credits, useCredits, addRecentTool, showAlert } = useAppStore();
+  const { credits, useCredits, addRecentTool, showAlert, language } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -30,6 +30,8 @@ export const StudyBuddy: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<{ name: string; type: 'pdf' | 'image'; data: string; mimeType: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const languageName = language === 'bn' ? 'Bengali' : language === 'hi' ? 'Hindi' : 'English';
 
   useEffect(() => {
     addRecentTool('Study Buddy');
@@ -165,9 +167,9 @@ export const StudyBuddy: React.FC = () => {
     try {
       let stream;
       if (currentFile) {
-        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history);
+        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history, languageName);
       } else {
-        stream = generateCompletionStream(promptText, history);
+        stream = generateCompletionStream(promptText, history, languageName);
       }
 
       let fullResponse = '';

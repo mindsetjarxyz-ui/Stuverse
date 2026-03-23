@@ -75,6 +75,10 @@ export function Landing() {
     window.open('https://buy.stripe.com/test_dummy', '_blank');
   };
 
+  const handlePlusUpgrade = () => {
+    window.open('https://buy.stripe.com/test_plus', '_blank');
+  };
+
   const features = [
     {
       icon: MessageSquare,
@@ -107,13 +111,29 @@ export function Landing() {
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',
       border: 'border-purple-400/20'
+    },
+    {
+      icon: BrainCircuit,
+      title: 'AI Note-Taker',
+      desc: 'Automatically transcribe lectures and convert them into structured academic notes.',
+      color: 'text-rose-400',
+      bg: 'bg-rose-400/10',
+      border: 'border-rose-400/20'
+    },
+    {
+      icon: Sparkles,
+      title: 'Multi-Language',
+      desc: 'Generate content in English, Bengali, Hindi, and more to suit your needs.',
+      color: 'text-cyan-400',
+      bg: 'bg-cyan-400/10',
+      border: 'border-cyan-400/20'
     }
   ];
 
   const pricing = [
     {
       name: 'Free',
-      credits: '50 Credits / Day',
+      credits: '80 Credits / Day',
       price: '0',
       features: [
         'Basic AI Chat & Support',
@@ -127,21 +147,39 @@ export function Landing() {
       popular: false
     },
     {
-      name: 'Pro',
-      credits: '200 Credits / Day',
-      price: '9.99',
+      name: 'Studygen Pro',
+      credits: '200 Credits / Day (6200/mo)',
+      price: '0.99',
       period: '/mo',
       features: [
-        'Advanced AI Models (Gemini 3.1 Flash Lite)',
+        'Advanced AI Models',
+        'Priority Fast Generation',
         'Deep Multi-file Summaries',
-        'Up to 30 Quiz Questions',
-        'Priority AI Processing',
-        'Advanced Study Analytics',
+        'AI Note-Taker Access',
+        'Multi-Language Support',
         'Exclusive Beta Features'
       ],
       button: 'Upgrade to Pro',
       action: handleProUpgrade,
-      popular: true
+      popular: true,
+      tag: 'Best Selling'
+    },
+    {
+      name: 'Studygen Plus',
+      credits: '500 Credits / Day (15000/mo)',
+      price: '2.99',
+      period: '/mo',
+      features: [
+        'Highest Priority Processing',
+        'Unlimited Deep Analysis',
+        'Advanced Study Analytics',
+        'Early Access to New Tools',
+        'Premium Support',
+        'Custom Study Templates'
+      ],
+      button: 'Upgrade to Plus',
+      action: handlePlusUpgrade,
+      popular: false
     }
   ];
 
@@ -482,7 +520,7 @@ export function Landing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {pricing.map((plan, i) => (
               <motion.div
                 key={plan.name}
@@ -491,15 +529,15 @@ export function Landing() {
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
                 className={cn(
-                  "relative p-8 rounded-3xl border transition-all duration-500 group",
+                  "relative p-8 rounded-3xl border transition-all duration-500 group flex flex-col",
                   plan.popular 
                     ? "bg-white/5 border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.05)] scale-105 z-10" 
                     : "bg-transparent border-white/10 hover:border-white/20"
                 )}
               >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-white text-black text-[10px] font-bold uppercase tracking-wider">
-                    Most Popular
+                {(plan.popular || plan.tag) && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-white text-black text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+                    {plan.tag || 'Most Popular'}
                   </div>
                 )}
 

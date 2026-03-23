@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-export type Plan = 'free' | 'pro';
+export type Plan = 'free' | 'pro' | 'plus';
 export type Language = 'en' | 'bn' | 'hi' | 'es';
 
 interface AppState {
@@ -24,6 +24,7 @@ interface AppState {
   claimDailyCredits: () => void;
   useCredits: (amount: number) => boolean;
   upgradeToPro: () => void;
+  upgradeToPlus: () => void;
   setLanguage: (lang: Language) => void;
   addRecentTool: (tool: string) => void;
   updateQuizAccuracy: (score: number, total: number) => void;
@@ -35,8 +36,9 @@ interface AppState {
   closeAlert: () => void;
 }
 
-const DAILY_FREE_CREDITS = 45;
-const DAILY_PRO_CREDITS = 120;
+const DAILY_FREE_CREDITS = 80;
+const DAILY_PRO_CREDITS = 200;
+const DAILY_PLUS_CREDITS = 500;
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -62,8 +64,12 @@ export const useAppStore = create<AppState>()(
           const currentDate = new Date(today);
           const diffDays = Math.floor((currentDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
           
+          let dailyCredits = DAILY_FREE_CREDITS;
+          if (plan === 'pro') dailyCredits = DAILY_PRO_CREDITS;
+          if (plan === 'plus') dailyCredits = DAILY_PLUS_CREDITS;
+
           set({
-            credits: plan === 'pro' ? DAILY_PRO_CREDITS : DAILY_FREE_CREDITS,
+            credits: dailyCredits,
             lastClaimDate: today,
             streak: diffDays === 1 ? streak + 1 : 1,
           });
@@ -80,6 +86,7 @@ export const useAppStore = create<AppState>()(
       },
 
       upgradeToPro: () => set({ plan: 'pro', credits: DAILY_PRO_CREDITS }),
+      upgradeToPlus: () => set({ plan: 'plus', credits: DAILY_PLUS_CREDITS }),
       
       setLanguage: (lang) => set({ language: lang }),
       
@@ -107,7 +114,10 @@ export const useAppStore = create<AppState>()(
             let currentPlan = data.plan ?? 'free';
 
             if (today !== lastRenewal) {
-              currentCredits = currentPlan === 'pro' ? DAILY_PRO_CREDITS : DAILY_FREE_CREDITS;
+              if (currentPlan === 'plus') currentCredits = DAILY_PLUS_CREDITS;
+              else if (currentPlan === 'pro') currentCredits = DAILY_PRO_CREDITS;
+              else currentCredits = DAILY_FREE_CREDITS;
+
               await updateDoc(doc(db, 'users', userId), {
                 credits: currentCredits,
                 lastRenewalDate: serverTimestamp()

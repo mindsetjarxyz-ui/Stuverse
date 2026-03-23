@@ -105,7 +105,7 @@ export function Dashboard() {
           Welcome back{user?.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}
         </h1>
         <p className="text-gray-400 text-lg">
-          You have <span className="text-emerald-400 font-medium">{credits} credits</span> remaining today on your <span className="capitalize text-gray-200 font-medium">{plan}</span> plan.
+          You have <span className="text-emerald-400 font-medium">{credits} credits</span> remaining today on your <span className="capitalize text-gray-200 font-medium">{plan === 'free' ? t.free_plan : plan === 'pro' ? t.pro_plan : t.plus_plan}</span>.
         </p>
       </motion.header>
 

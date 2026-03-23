@@ -11,7 +11,7 @@ import { Card } from '../components/ui/Card';
 
 export const Planner: React.FC = () => {
   const { t } = useTranslation();
-  const { useCredits, addRecentTool, showAlert } = useAppStore();
+  const { useCredits, addRecentTool, showAlert, language } = useAppStore();
   
   const [subjects, setSubjects] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -19,6 +19,8 @@ export const Planner: React.FC = () => {
   const [weakTopics, setWeakTopics] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [plan, setPlan] = useState('');
+
+  const languageName = language === 'bn' ? 'Bengali' : language === 'hi' ? 'Hindi' : 'English';
 
   useEffect(() => {
     addRecentTool('Study Planner');
@@ -46,7 +48,7 @@ Weak Topics to focus on: ${weakTopics}
 Please provide a structured calendar grid or day-by-day breakdown, color-coded session suggestions (using emoji or text labels), and break suggestions.`;
 
     try {
-      const stream = generateCompletionStream(prompt);
+      const stream = generateCompletionStream(prompt, [], languageName);
       for await (const chunk of stream) {
         setPlan(prev => prev + chunk);
       }

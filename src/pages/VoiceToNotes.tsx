@@ -12,7 +12,7 @@ import { cn } from '../lib/utils';
 
 export const VoiceToNotes: React.FC = () => {
   const { t } = useTranslation();
-  const { useCredits, addRecentTool, showAlert } = useAppStore();
+  const { useCredits, addRecentTool, showAlert, language } = useAppStore();
   
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -20,6 +20,8 @@ export const VoiceToNotes: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [notes, setNotes] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
+
+  const languageName = language === 'bn' ? 'Bengali' : language === 'hi' ? 'Hindi' : 'English';
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -113,7 +115,7 @@ export const VoiceToNotes: React.FC = () => {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64Data = (e.target?.result as string).split(',')[1];
-        const result = await transcribeAudio(base64Data, audioBlob.type);
+        const result = await transcribeAudio(base64Data, audioBlob.type, languageName);
         setNotes(result || 'Failed to generate notes.');
         setIsGenerating(false);
       };
