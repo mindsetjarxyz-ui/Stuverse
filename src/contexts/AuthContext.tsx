@@ -60,8 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         email: userCredential.user.email,
         createdAt: serverTimestamp(),
-        credits: 50,
-        plan: 'Free'
+        credits: 80,
+        plan: 'free'
       });
     } catch (error) {
       const authError = error as AuthError;
@@ -84,8 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           email: userCredential.user.email,
           createdAt: serverTimestamp(),
-          credits: 50,
-          plan: 'Free'
+          credits: 80,
+          plan: 'free'
         });
       }
     } catch (error) {

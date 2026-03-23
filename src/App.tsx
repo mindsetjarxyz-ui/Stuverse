@@ -23,6 +23,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route element={<ProtectedRoute />}>
+            <Route path="/pricing" element={<Pricing />} />
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/study-buddy" element={<StudyBuddy />} />
@@ -30,7 +31,6 @@ export default function App() {
               <Route path="/quiz" element={<Quizverse />} />
               <Route path="/planner" element={<Planner />} />
               <Route path="/voice-to-notes" element={<VoiceToNotes />} />
-              <Route path="/pricing" element={<Pricing />} />
             </Route>
           </Route>
         </Routes>

@@ -1,27 +1,74 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Check, Zap, Sparkles, Shield, Clock, Globe } from 'lucide-react';
+import { Check, Zap, Sparkles, Shield, Clock, Globe, ArrowLeft } from 'lucide-react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { Button } from '../components/ui/Button';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export const Pricing: React.FC = () => {
   const { t } = useTranslation();
-  const { plan, upgradeToPro, upgradeToPlus, showAlert } = useAppStore();
+  const { plan, showAlert } = useAppStore();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const handleProUpgrade = () => {
-    window.open('https://buy.stripe.com/test_dummy', '_blank');
-    upgradeToPro();
-    showAlert('Successfully upgraded to Studygen Pro!');
-  };
+  const handleUpgrade = async (planName: string, planId: string) => {
+    if (!user) {
+      showAlert('Please log in to upgrade your plan.');
+      return;
+    }
 
-  const handlePlusUpgrade = () => {
-    window.open('https://buy.stripe.com/test_plus', '_blank');
-    upgradeToPlus();
-    showAlert('Successfully upgraded to Studygen Plus!');
+    if (!planId) {
+      showAlert('Razorpay Plan ID not configured. Please check your environment variables.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/create-razorpay-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          plan: planName,
+          planId: planId,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.subscriptionId) {
+        const options = {
+          key: data.keyId,
+          subscription_id: data.subscriptionId,
+          name: 'Studygen AI',
+          description: `Upgrade to ${planName} Plan`,
+          image: 'https://picsum.photos/seed/study/200/200',
+          handler: function (response: any) {
+            showAlert('Payment successful! Your plan will be updated shortly.');
+            // The webhook will handle the actual database update
+          },
+          prefill: {
+            name: user.displayName || '',
+            email: user.email || '',
+          },
+          theme: {
+            color: '#6366f1',
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+      } else {
+        throw new Error(data.error || 'Failed to create subscription');
+      }
+    } catch (error: any) {
+      console.error('Upgrade Error:', error);
+      showAlert(`Failed to start upgrade process: ${error.message}`);
+    }
   };
 
   const pricing = [
@@ -42,10 +89,12 @@ export const Pricing: React.FC = () => {
       popular: false
     },
     {
-      name: 'Studygen Pro',
+      name: 'pro',
+      displayName: 'Studygen Pro',
       credits: '200 Credits / Day (6200/mo)',
       price: '0.99',
       period: '/mo',
+      planId: import.meta.env.VITE_RAZORPAY_PRO_PLAN_ID,
       features: [
         'Advanced AI Models',
         'Priority Fast Generation',
@@ -55,16 +104,18 @@ export const Pricing: React.FC = () => {
         'Exclusive Beta Features'
       ],
       button: plan === 'pro' ? 'Current Plan' : plan === 'plus' ? 'Downgrade' : 'Upgrade to Pro',
-      action: handleProUpgrade,
+      action: () => handleUpgrade('pro', import.meta.env.VITE_RAZORPAY_PRO_PLAN_ID),
       disabled: plan === 'pro',
       popular: true,
       tag: 'Best Selling'
     },
     {
-      name: 'Studygen Plus',
+      name: 'plus',
+      displayName: 'Studygen Plus',
       credits: '500 Credits / Day (15000/mo)',
       price: '2.99',
       period: '/mo',
+      planId: import.meta.env.VITE_RAZORPAY_PLUS_PLAN_ID,
       features: [
         'Highest Priority Processing',
         'Unlimited Deep Analysis',
@@ -74,17 +125,27 @@ export const Pricing: React.FC = () => {
         'Custom Study Templates'
       ],
       button: plan === 'plus' ? 'Current Plan' : 'Upgrade to Plus',
-      action: handlePlusUpgrade,
+      action: () => handleUpgrade('plus', import.meta.env.VITE_RAZORPAY_PLUS_PLAN_ID),
       disabled: plan === 'plus',
       popular: false
     }
   ];
 
   return (
-    <div className="min-h-screen py-20 px-6 relative overflow-hidden">
+    <div className="min-h-screen py-12 px-6 relative overflow-hidden bg-bg-primary">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)] -z-10"></div>
       
       <div className="max-w-7xl mx-auto">
+        <div className="flex justify-start mb-12">
+          <button 
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Back to Dashboard
+          </button>
+        </div>
+
         <div className="text-center max-w-3xl mx-auto mb-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -121,7 +182,7 @@ export const Pricing: React.FC = () => {
               )}
 
               <div className="mb-8">
-                <h3 className="text-xl font-heading font-bold text-white mb-2">{p.name}</h3>
+                <h3 className="text-xl font-heading font-bold text-white mb-2">{p.displayName || p.name}</h3>
                 <p className="text-sm text-gray-400">{p.credits}</p>
               </div>
 
