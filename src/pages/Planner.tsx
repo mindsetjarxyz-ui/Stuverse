@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Sparkles, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { generateCompletionStream } from '../services/ai';
@@ -169,7 +170,7 @@ Please provide a structured calendar grid or day-by-day breakdown, color-coded s
           <div className="overflow-y-auto h-[calc(100%-4rem)]">
             {plan ? (
               <div className="markdown-body">
-                <ReactMarkdown>{plan}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{plan}</ReactMarkdown>
               </div>
             ) : isGenerating ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">

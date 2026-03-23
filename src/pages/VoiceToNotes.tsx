@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { transcribeAudio } from '../services/ai';
@@ -271,7 +272,7 @@ export const VoiceToNotes: React.FC = () => {
             <div className="flex-1 overflow-y-auto">
               {notes ? (
                 <div className="markdown-body">
-                  <ReactMarkdown>{notes}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{notes}</ReactMarkdown>
                 </div>
               ) : isGenerating ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">

@@ -62,10 +62,14 @@
   .markdown-body ul { @apply list-disc pl-5 mb-4 space-y-1; }
   .markdown-body ol { @apply list-decimal pl-5 mb-4 space-y-1; }
   .markdown-body strong { @apply text-white font-semibold; }
+  .markdown-body em { @apply italic; }
   .markdown-body code { @apply bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono text-gray-300; }
   .markdown-body pre { @apply bg-[#0B0B0C] border border-border-glass p-4 rounded-xl overflow-x-auto mb-4; }
   .markdown-body pre code { @apply bg-transparent p-0 text-gray-300; }
   .markdown-body blockquote { @apply border-l-2 border-gray-500 pl-4 py-1 my-4 text-gray-400 italic; }
+  .markdown-body table { @apply w-full border-collapse mb-4; }
+  .markdown-body th, .markdown-body td { @apply border border-border-glass p-2 text-left; }
+  .markdown-body th { @apply bg-white/5 font-semibold text-white; }
 }
 
 /* Custom Scrollbar */

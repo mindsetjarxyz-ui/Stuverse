@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { FileText, Upload, Type, Loader2, Sparkles, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { analyzeDocumentStream, generateCompletionStream } from '../services/ai';
@@ -253,7 +254,7 @@ export const Summarizer: React.FC = () => {
           <div className="flex-1 overflow-y-auto">
             {summary ? (
               <div className="markdown-body">
-                <ReactMarkdown>{summary}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
               </div>
             ) : isGenerating ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">

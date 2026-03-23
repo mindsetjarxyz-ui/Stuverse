@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Paperclip, Image as ImageIcon, FileText, Loader2, Bot, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { analyzeDocumentStream, generateCompletionStream } from '../services/ai';
@@ -245,7 +246,7 @@ export const StudyBuddy: React.FC = () => {
               )}
               {msg.content ? (
                 <div className="markdown-body text-sm">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                 </div>
               ) : (
                 msg.role === 'ai' && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
