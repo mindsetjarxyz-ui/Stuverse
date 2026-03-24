@@ -14,57 +14,35 @@ export const Pricing: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const handleUpgrade = async (planName: string, planId: string) => {
+  const handleUpgrade = async (planName: string, productPath: string) => {
     if (!user) {
       showAlert('Please log in to upgrade your plan.');
       return;
     }
 
-    if (!planId) {
-      showAlert('Razorpay Plan ID not configured. Please check your environment variables.');
+    if (!productPath) {
+      showAlert('FastSpring Product Path not configured. Please check your environment variables.');
       return;
     }
 
     try {
-      const response = await fetch('/api/create-razorpay-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // FastSpring SBL (Storefront Builder Library)
+      // We push the product to the cart and trigger checkout
+      // We also pass the userId as a secure tag or session attribute if possible, 
+      // but for SBL we usually use 'tags' which are sent in the webhook.
+      (window as any).fastspring.builder.push({
+        products: [
+          {
+            path: productPath,
+            quantity: 1
+          }
+        ],
+        checkout: true,
+        tags: {
           userId: user.uid,
-          plan: planName,
-          planId: planId,
-        }),
+          plan: planName
+        }
       });
-
-      const data = await response.json();
-      
-      if (data.subscriptionId) {
-        const options = {
-          key: data.keyId,
-          subscription_id: data.subscriptionId,
-          name: 'Studygen AI',
-          description: `Upgrade to ${planName} Plan`,
-          image: 'https://picsum.photos/seed/study/200/200',
-          handler: function (response: any) {
-            showAlert('Payment successful! Your plan will be updated shortly.');
-            // The webhook will handle the actual database update
-          },
-          prefill: {
-            name: user.displayName || '',
-            email: user.email || '',
-          },
-          theme: {
-            color: '#6366f1',
-          },
-        };
-
-        const rzp = new (window as any).Razorpay(options);
-        rzp.open();
-      } else {
-        throw new Error(data.error || 'Failed to create subscription');
-      }
     } catch (error: any) {
       console.error('Upgrade Error:', error);
       showAlert(`Failed to start upgrade process: ${error.message}`);
@@ -94,7 +72,7 @@ export const Pricing: React.FC = () => {
       credits: '200 Credits / Day (6200/mo)',
       price: '0.99',
       period: '/mo',
-      planId: import.meta.env.VITE_RAZORPAY_PRO_PLAN_ID,
+      planId: import.meta.env.VITE_FASTSPRING_PRO_PATH,
       features: [
         'Advanced AI Models',
         'Priority Fast Generation',
@@ -104,7 +82,7 @@ export const Pricing: React.FC = () => {
         'Exclusive Beta Features'
       ],
       button: plan === 'pro' ? 'Current Plan' : plan === 'plus' ? 'Downgrade' : 'Upgrade to Pro',
-      action: () => handleUpgrade('pro', import.meta.env.VITE_RAZORPAY_PRO_PLAN_ID),
+      action: () => handleUpgrade('pro', import.meta.env.VITE_FASTSPRING_PRO_PATH),
       disabled: plan === 'pro',
       popular: true,
       tag: 'Best Selling'
@@ -115,7 +93,7 @@ export const Pricing: React.FC = () => {
       credits: '500 Credits / Day (15000/mo)',
       price: '2.99',
       period: '/mo',
-      planId: import.meta.env.VITE_RAZORPAY_PLUS_PLAN_ID,
+      planId: import.meta.env.VITE_FASTSPRING_PLUS_PATH,
       features: [
         'Highest Priority Processing',
         'Unlimited Deep Analysis',
@@ -125,7 +103,7 @@ export const Pricing: React.FC = () => {
         'Custom Study Templates'
       ],
       button: plan === 'plus' ? 'Current Plan' : 'Upgrade to Plus',
-      action: () => handleUpgrade('plus', import.meta.env.VITE_RAZORPAY_PLUS_PLAN_ID),
+      action: () => handleUpgrade('plus', import.meta.env.VITE_FASTSPRING_PLUS_PATH),
       disabled: plan === 'plus',
       popular: false
     }
