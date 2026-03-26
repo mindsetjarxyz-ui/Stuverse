@@ -167,8 +167,9 @@ export function Dashboard() {
               <div className="flex items-center justify-center py-8">
                 <Clock className="w-6 h-6 text-gray-500 animate-spin" />
               </div>
-            ) : recentScores.length > 0 ? (
-              recentScores.map((score) => (
+            ) : (recentScores?.length || 0) > 0 ? (
+              <div className="space-y-4">
+                {recentScores?.map((score) => (
                 <div key={score.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white truncate">{score.topic}</p>
@@ -181,8 +182,9 @@ export function Dashboard() {
                     <p className="text-[10px] text-gray-500">{Math.round((score.score / score.total) * 100)}%</p>
                   </div>
                 </div>
-              ))
-            ) : (
+              ))}
+            </div>
+          ) : (
               <div className="text-center py-8">
                 <CheckSquare className="w-8 h-8 text-gray-600 mx-auto mb-3" />
                 <p className="text-sm text-gray-500">No quizzes taken yet.</p>

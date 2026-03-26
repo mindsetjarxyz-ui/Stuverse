@@ -90,13 +90,16 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
   try {
     const responseStream = await ai.models.generateContentStream({
       model: 'gemini-3.1-flash-lite-preview',
-      contents: {
-        parts: [
-          ...history.flatMap(h => h.parts),
-          { inlineData: { data: fileData, mimeType } },
-          { text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }
-        ]
-      }
+      contents: [
+        ...history,
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { data: fileData, mimeType } },
+            { text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }
+          ]
+        }
+      ]
     });
     for await (const chunk of responseStream) {
       yield chunk.text;

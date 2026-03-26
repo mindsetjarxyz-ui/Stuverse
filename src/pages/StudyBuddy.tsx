@@ -108,8 +108,22 @@ export const StudyBuddy: React.FC = () => {
 
   const handleSend = async () => {
     if (!input.trim() && !selectedFile) return;
-    if (!user || !chatId) return;
+    if (!user) return;
 
+    let currentChatId = chatId;
+    if (!currentChatId) {
+      // Create initial chat session
+      const chatsRef = collection(db, 'chats');
+      const docRef = await addDoc(chatsRef, {
+        userId: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        title: 'New Chat'
+      });
+      currentChatId = docRef.id;
+      setChatId(currentChatId);
+    }
+    
     const cost = 1;
     
     if (credits < cost) {
@@ -132,7 +146,7 @@ export const StudyBuddy: React.FC = () => {
     }
 
     // Save user message to Firestore
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    const messagesRef = collection(db, 'chats', currentChatId, 'messages');
     await addDoc(messagesRef, {
       role: 'user',
       content: promptText || 'Analyze this document.',
@@ -141,13 +155,13 @@ export const StudyBuddy: React.FC = () => {
     });
 
     // Update chat title if it's the first message
-    if (messages.length <= 1 && promptText) {
-      await updateDoc(doc(db, 'chats', chatId), {
+    if (messages && messages.length <= 1 && promptText) {
+      await updateDoc(doc(db, 'chats', currentChatId), {
         title: promptText.slice(0, 30) + (promptText.length > 30 ? '...' : ''),
         updatedAt: serverTimestamp()
       });
-    } else {
-      await updateDoc(doc(db, 'chats', chatId), {
+    } else if (currentChatId) {
+      await updateDoc(doc(db, 'chats', currentChatId), {
         updatedAt: serverTimestamp()
       });
     }
@@ -157,7 +171,7 @@ export const StudyBuddy: React.FC = () => {
     setIsTyping(true);
 
     // Prepare history for Gemini
-    const history = messages
+    const history = (messages || [])
       .filter(m => m.id !== 'welcome')
       .map(m => ({
         role: m.role === 'user' ? 'user' as const : 'model' as const,
@@ -216,7 +230,7 @@ export const StudyBuddy: React.FC = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((msg) => (
+        {(messages || []).map((msg) => (
           <motion.div
             key={msg.id}
             initial={{ opacity: 0, y: 10 }}
@@ -256,7 +270,7 @@ export const StudyBuddy: React.FC = () => {
             </div>
           </motion.div>
         ))}
-        {isTyping && messages[messages.length - 1].role === 'user' && (
+        {isTyping && messages && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
           <div className="flex gap-4 max-w-[85%]">
             <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
               <Bot className="w-4 h-4 text-gray-400" />

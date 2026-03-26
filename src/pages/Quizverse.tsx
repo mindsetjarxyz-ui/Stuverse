@@ -75,7 +75,7 @@ export const Quizverse: React.FC = () => {
           useCredits(cost); // Sync local state
         }
 
-        const shuffledQuestions = generatedQuestions.map((q: Question) => {
+        const shuffledQuestions = generatedQuestions?.map((q: Question) => {
           const optionsWithOriginalIndex = q.options.map((opt, idx) => ({ opt, idx }));
           const shuffled = [...optionsWithOriginalIndex].sort(() => Math.random() - 0.5);
           const newCorrectIndex = shuffled.findIndex(s => s.idx === q.correctAnswerIndex);
@@ -86,7 +86,7 @@ export const Quizverse: React.FC = () => {
           };
         });
 
-        setQuestions(shuffledQuestions);
+        setQuestions(shuffledQuestions || []);
         setQuizState('playing');
         setCurrentIndex(0);
         setScore(0);
@@ -114,12 +114,14 @@ export const Quizverse: React.FC = () => {
   };
 
   const handleNext = async () => {
+    if (!questions || questions.length === 0) return;
+
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(i => i + 1);
       setSelectedAnswer(null);
       setShowExplanation(false);
     } else {
-      updateQuizAccuracy(score, questions.length);
+      updateQuizAccuracy(score, questions?.length || 0);
       
       // Save score to Firestore
       if (user) {
@@ -128,7 +130,7 @@ export const Quizverse: React.FC = () => {
             userId: user.uid,
             topic,
             score,
-            total: questions.length,
+            total: questions?.length || 0,
             timestamp: serverTimestamp()
           });
         } catch (error) {
@@ -296,7 +298,7 @@ export const Quizverse: React.FC = () => {
           </motion.div>
         )}
 
-        {quizState === 'playing' && questions.length > 0 && (
+        {quizState === 'playing' && questions && questions.length > 0 && (
           <motion.div
             key="playing"
             initial={{ opacity: 0, x: 20 }}
@@ -306,22 +308,22 @@ export const Quizverse: React.FC = () => {
             <Card className="border-white/10 relative overflow-hidden">
               <div 
                 className="absolute top-0 left-0 h-1 bg-gray-400 transition-all duration-300"
-                style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
+                style={{ width: `${((currentIndex + 1) / (questions?.length || 1)) * 100}%` }}
               />
               
               <div className="flex justify-between items-center mb-6 pt-2">
-                <span className="text-sm font-medium text-gray-300">Question {currentIndex + 1} of {questions.length}</span>
+                <span className="text-sm font-medium text-gray-300">Question {currentIndex + 1} of {questions?.length || 0}</span>
                 <span className="text-sm font-mono bg-white/5 px-2 py-1 rounded text-gray-300">Score: {score}</span>
               </div>
 
               <h2 className="text-xl font-heading font-medium text-white mb-8">
-                {questions[currentIndex].question}
+                {questions[currentIndex]?.question}
               </h2>
 
               <div className="space-y-3 mb-8">
-                {questions[currentIndex].options.map((option, idx) => {
+                {questions[currentIndex]?.options.map((option, idx) => {
                   const isSelected = selectedAnswer === idx;
-                  const isCorrect = idx === questions[currentIndex].correctAnswerIndex;
+                  const isCorrect = idx === questions[currentIndex]?.correctAnswerIndex;
                   const showStatus = selectedAnswer !== null;
 
                   let btnClass = "bg-bg-primary border-border-glass text-gray-300 hover:border-white/30 hover:bg-white/5";
@@ -369,7 +371,7 @@ export const Quizverse: React.FC = () => {
                   >
                     <p className="text-sm text-gray-300">
                       <span className="font-semibold text-white mr-2">Explanation:</span>
-                      {questions[currentIndex].explanation}
+                      {questions[currentIndex]?.explanation}
                     </p>
                   </motion.div>
                 )}
@@ -381,7 +383,7 @@ export const Quizverse: React.FC = () => {
                   disabled={selectedAnswer === null}
                   className="bg-white/10 text-white border-white/20 hover:bg-white/20"
                 >
-                  {currentIndex === questions.length - 1 ? 'Finish' : 'Next Question'}
+                  {currentIndex === (questions?.length || 0) - 1 ? 'Finish' : 'Next Question'}
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -403,7 +405,7 @@ export const Quizverse: React.FC = () => {
               </div>
               
               <h2 className="text-3xl font-heading font-bold text-white mb-2">Quiz Completed!</h2>
-              <p className="text-gray-400 mb-8">You scored {score} out of {questions.length}</p>
+              <p className="text-gray-400 mb-8">You scored {score} out of {questions?.length || 0}</p>
               
               <div className="flex justify-center gap-4">
                 <Button onClick={resetQuiz} variant="secondary">

@@ -91,7 +91,7 @@ export const useAppStore = create<AppState>()(
       setLanguage: (lang) => set({ language: lang }),
       
       addRecentTool: (tool) => set((state) => ({
-        recentTools: [tool, ...state.recentTools.filter(t => t !== tool)].slice(0, 4)
+        recentTools: [tool, ...(state.recentTools || []).filter(t => t !== tool)].slice(0, 4)
       })),
 
       updateQuizAccuracy: (score, total) => set((state) => {
