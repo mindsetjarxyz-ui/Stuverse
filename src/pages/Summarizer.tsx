@@ -12,7 +12,7 @@ import { cn } from '../lib/utils';
 
 export const Summarizer: React.FC = () => {
   const { t } = useTranslation();
-  const { useCredits, addRecentTool, showAlert, language } = useAppStore();
+  const { plan, useCredits, addRecentTool, showAlert, language } = useAppStore();
   
   const [mode, setMode] = useState<'text' | 'pdf'>('text');
   const [summaryType, setSummaryType] = useState<'quick' | 'deep'>('quick');
@@ -185,15 +185,25 @@ export const Summarizer: React.FC = () => {
                 <div className="text-xs opacity-80">Brief overview of main points</div>
               </button>
               <button
-                onClick={() => setSummaryType('deep')}
+                onClick={() => {
+                  if (plan === 'free') {
+                    showAlert('Upgrade to Pro to use Deep Academic mode.');
+                    return;
+                  }
+                  setSummaryType('deep');
+                }}
                 className={cn(
                   "py-3 px-4 rounded-xl text-sm font-medium transition-all border text-left",
                   summaryType === 'deep' 
                     ? "bg-white/10 border-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
-                    : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20"
+                    : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20",
+                  plan === 'free' && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <div className="font-semibold mb-1 text-white">Deep Academic</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-semibold text-white">Deep Academic</div>
+                  {plan === 'free' && <span className="text-[10px] font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white px-1.5 py-0.5 rounded">PRO</span>}
+                </div>
                 <div className="text-xs opacity-80">Structured notes with tips</div>
               </button>
             </div>

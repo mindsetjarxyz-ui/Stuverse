@@ -43,7 +43,7 @@ export const Quizverse: React.FC = () => {
   const [score, setScore] = useState(0);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  const maxQuestions = plan === 'free' ? 15 : 50;
+  const maxQuestions = plan === 'free' ? 15 : 30;
 
   useEffect(() => {
     addRecentTool('Quizverse');
@@ -206,20 +206,23 @@ export const Quizverse: React.FC = () => {
                   <button
                     onClick={() => {
                       if (plan === 'free') {
-                        showAlert('Upgrade to Pro to generate 50 questions.');
+                        showAlert('Upgrade to Pro to generate 30 questions.');
                         return;
                       }
-                      setCount(50);
+                      setCount(30);
                     }}
                     className={cn(
                       "py-2 px-4 rounded-xl text-sm font-medium transition-all border",
-                      count === 50 
+                      count === 30 
                         ? "bg-white/10 border-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
                         : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20",
                       plan === 'free' && "opacity-50 cursor-not-allowed"
                     )}
                   >
-                    50 Questions
+                    <div className="flex items-center justify-center gap-2">
+                      <span>30 Questions</span>
+                      {plan === 'free' && <span className="text-[10px] font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white px-1.5 py-0.5 rounded">PRO</span>}
+                    </div>
                   </button>
                 </div>
                 {plan === 'free' && (
