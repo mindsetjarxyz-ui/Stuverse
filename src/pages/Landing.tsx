@@ -34,13 +34,11 @@ export function Landing() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (location.pathname === '/login') {
-      if (user) {
-        navigate('/dashboard');
-      } else {
-        setShowAuthModal(true);
-        setIsSignUp(false);
-      }
+    if (user && (location.pathname === '/' || location.pathname === '/login')) {
+      navigate('/dashboard');
+    } else if (location.pathname === '/login' && !user) {
+      setShowAuthModal(true);
+      setIsSignUp(false);
     }
   }, [location.pathname, user, navigate]);
 
@@ -73,10 +71,9 @@ export function Landing() {
     setLoading(true);
     try {
       await signInWithGoogle();
-      navigate('/dashboard');
+      // The browser will redirect to Google, so we don't navigate or stop loading here
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
