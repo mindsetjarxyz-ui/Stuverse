@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, MessageSquare, FileText, CheckSquare, Calendar, Zap, ArrowRight, BrainCircuit, Shield, Sparkles, Star, X, Mail, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { BookOpen, MessageSquare, FileText, CheckSquare, Calendar, Zap, ArrowRight, BrainCircuit, Shield, Sparkles, Star, X, Mail, Lock, AlertCircle, CheckCircle2, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 
@@ -22,6 +22,7 @@ const staggerContainer = {
 export function Landing() {
   const { user, signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -31,6 +32,17 @@ export function Landing() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (location.pathname === '/login') {
+      if (user) {
+        navigate('/dashboard');
+      } else {
+        setShowAuthModal(true);
+        setIsSignUp(false);
+      }
+    }
+  }, [location.pathname, user, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,33 +265,33 @@ export function Landing() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg glass-panel p-8 sm:p-12 overflow-hidden shadow-[0_0_100px_rgba(255,255,255,0.05)]"
+              className="relative w-full max-w-md glass-panel p-6 sm:p-8 overflow-hidden shadow-[0_0_100px_rgba(255,255,255,0.05)] max-h-[90vh] overflow-y-auto"
             >
               <button 
                 onClick={() => setShowAuthModal(false)}
-                className="absolute top-6 right-6 p-2 text-gray-500 hover:text-white transition-all hover:rotate-90"
+                className="absolute top-4 right-4 p-2 text-gray-500 hover:text-white transition-all hover:rotate-90"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
 
-              <div className="text-center mb-10">
+              <div className="text-center mb-6">
                 <motion.div 
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: 'spring', delay: 0.2 }}
-                  className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 mx-auto mb-6 shadow-inner"
+                  className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 mx-auto mb-4 shadow-inner"
                 >
-                  <BookOpen className="w-8 h-8 text-white" />
+                  <BookOpen className="w-6 h-6 text-white" />
                 </motion.div>
-                <h3 className="text-3xl font-heading font-bold text-white tracking-tight">
+                <h3 className="text-2xl font-heading font-bold text-white tracking-tight">
                   {isSignUp ? 'Create your account' : 'Welcome back'}
                 </h3>
-                <p className="text-gray-400 mt-3 text-lg">
+                <p className="text-gray-400 mt-2 text-sm">
                   {isSignUp ? 'Join the community of elite learners' : 'Continue your journey to academic excellence'}
                 </p>
               </div>
 
-              <form onSubmit={handleAuth} className="space-y-6">
+              <form onSubmit={handleAuth} className="space-y-4">
                 {error && (
                   <motion.div 
                     initial={{ opacity: 0, x: -20 }}
@@ -303,44 +315,44 @@ export function Landing() {
                 )}
 
                 {isSignUp && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Name</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</label>
                     <div className="relative group">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-white transition-colors" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-white transition-colors" />
                       <input 
                         type="text"
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Your Name"
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-lg"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-sm"
                       />
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Email Address</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Email Address</label>
                   <div className="relative group">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-white transition-colors" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-white transition-colors" />
                     <input 
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@example.com"
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-lg"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-sm"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Password</label>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Password</label>
                     {!isSignUp && (
                       <button 
                         type="button"
-                        className="text-xs font-medium text-gray-500 hover:text-white transition-colors"
+                        className="text-[10px] font-medium text-gray-500 hover:text-white transition-colors"
                         onClick={() => alert('Password reset feature coming soon!')}
                       >
                         Forgot password?
@@ -348,48 +360,48 @@ export function Landing() {
                     )}
                   </div>
                   <div className="relative group">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-white transition-colors" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-white transition-colors" />
                     <input 
                       type="password"
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-lg"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-sm"
                     />
                   </div>
                 </div>
 
                 <button 
                   disabled={loading}
-                  className="w-full py-5 bg-white text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-8 shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-[0.98]"
+                  className="w-full py-3 bg-white text-black rounded-xl font-bold text-base flex items-center justify-center gap-2 hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-6 shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-[0.98]"
                 >
                   {loading ? (
-                    <div className="w-6 h-6 border-3 border-black/20 border-t-black rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                   ) : (
                     <>
                       {isSignUp ? 'Get Started' : 'Sign In'}
-                      <ArrowRight className="w-5 h-5" />
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
               </form>
 
-              <div className="relative my-10">
+              <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-white/10"></div>
                 </div>
-                <div className="relative flex justify-center text-xs uppercase tracking-widest">
-                  <span className="bg-[#0B0B0C] px-4 text-gray-500 font-bold">Or continue with</span>
+                <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
+                  <span className="bg-[#0B0B0C] px-3 text-gray-500 font-bold">Or continue with</span>
                 </div>
               </div>
 
               <button 
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-bold flex items-center justify-center gap-4 hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+                className="w-full py-3 bg-white/5 border border-white/10 text-white rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] text-sm"
               >
-                <svg className="w-6 h-6" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -410,8 +422,8 @@ export function Landing() {
                 Google Account
               </button>
 
-              <div className="mt-10 text-center">
-                <p className="text-gray-400 font-medium">
+              <div className="mt-6 text-center">
+                <p className="text-gray-400 text-sm font-medium">
                   {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
                   <button 
                     onClick={() => setIsSignUp(!isSignUp)}
