@@ -27,20 +27,27 @@ export function Landing() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMessage('');
     setLoading(true);
     try {
       if (isSignUp) {
-        await signUp(email, password);
-        navigate('/dashboard');
+        const data = await signUp(email, password, name);
+        if (!data.session) {
+          setMessage("Check your email and confirm your account before logging in.");
+        } else {
+          navigate('/');
+        }
       } else {
         await signIn(email, password);
-        navigate('/dashboard');
+        navigate('/');
       }
     } catch (err: any) {
       setError(err.message);
@@ -282,6 +289,34 @@ export function Landing() {
                     <AlertCircle className="w-5 h-5 shrink-0" />
                     <p>{error}</p>
                   </motion.div>
+                )}
+
+                {message && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm"
+                  >
+                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    <p>{message}</p>
+                  </motion.div>
+                )}
+
+                {isSignUp && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Name</label>
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-white transition-colors" />
+                      <input 
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Your Name"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-white/20 focus:bg-white/10 transition-all text-lg"
+                      />
+                    </div>
+                  </div>
                 )}
 
                 <div className="space-y-2">

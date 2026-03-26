@@ -1,24 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  User, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  sendEmailVerification, 
-  signOut,
-  AuthError,
-  GoogleAuthProvider,
-  signInWithPopup,
-  reload
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { supabase } from '../supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<void>;
-  signUp: (email: string, pass: string) => Promise<void>;
+  signUp: (email: string, pass: string, name: string) => Promise<{ session: any; user: any }>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -32,88 +20,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, pass: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch (error) {
-      const authError = error as AuthError;
-      if (authError.code === 'auth/invalid-credential' || authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password') {
-        throw new Error('Email or password is incorrect');
-      }
-      throw error;
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
   };
 
-  const signUp = async (email: string, pass: string) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      
-      // Save user to Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        email: userCredential.user.email,
-        createdAt: serverTimestamp(),
-        credits: 80,
-        plan: 'free'
-      });
-    } catch (error) {
-      const authError = error as AuthError;
-      if (authError.code === 'auth/email-already-in-use') {
-        throw new Error('User already exists. Please sign in');
+  const signUp = async (email: string, pass: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({ 
+      email, 
+      password: pass,
+      options: {
+        data: {
+          name
+        }
       }
-      throw error;
-    }
+    });
+    if (error) throw error;
+    return data;
   };
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      const userCredential = await signInWithPopup(auth, provider);
-      
-      // Check if user exists in Firestore
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      if (!userDoc.exists()) {
-        // Save new user to Firestore
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          email: userCredential.user.email,
-          createdAt: serverTimestamp(),
-          credits: 80,
-          plan: 'free'
-        });
-      }
-    } catch (error) {
-      console.error('Error signing in with Google', error);
-      throw error;
-    }
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+    if (error) throw error;
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Error signing out', error);
-      throw error;
-    }
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   };
 
   const refreshUser = async () => {
-    if (auth.currentUser) {
-      await reload(auth.currentUser);
-      setUser({ ...auth.currentUser });
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
   };
 
   const resendVerification = async () => {
-    if (auth.currentUser) {
-      await sendEmailVerification(auth.currentUser);
-    }
+    // Supabase handles verification differently, usually via email templates
+    console.warn('resendVerification not implemented for Supabase');
   };
 
   return (

@@ -8,8 +8,7 @@ import { useAppStore } from '../store/useAppStore';
 import { analyzeDocumentStream, generateCompletionStream } from '../services/ai';
 import { Button } from '../components/ui/Button';
 import { cn } from '../lib/utils';
-import { db } from '../lib/firebase';
-import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, limit } from 'firebase/firestore';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Message {
@@ -41,48 +40,56 @@ export const StudyBuddy: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    const chatsRef = collection(db, 'chats');
-    const q = query(chatsRef, where('userId', '==', user.uid), orderBy('updatedAt', 'desc'), limit(1));
+    const fetchChat = async () => {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('userId', user.id)
+        .order('updatedAt', { ascending: false })
+        .limit(1)
+        .single();
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const latestChat = snapshot.docs[0];
-        setChatId(latestChat.id);
+      if (data) {
+        setChatId(data.id);
       } else {
         // Create initial chat session
-        addDoc(chatsRef, {
-          userId: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          title: 'New Chat'
-        }).then(docRef => setChatId(docRef.id));
+        const { data: newChat, error: createError } = await supabase
+          .from('chats')
+          .insert({
+            userId: user.id,
+            title: 'New Chat'
+          })
+          .select()
+          .single();
+        
+        if (newChat) setChatId(newChat.id);
       }
-    });
+    };
 
-    return () => unsubscribe();
+    fetchChat();
   }, [user]);
 
   // Load messages for current chat
   useEffect(() => {
     if (!chatId) return;
 
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chatId', chatId)
+        .order('timestamp', { ascending: true });
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Message[];
-      
-      if (msgs.length === 0) {
-        setMessages([{ id: 'welcome', role: 'ai', content: 'Hello! I am your Study Buddy. Ask me anything, or upload a PDF/Image for analysis.' }]);
-      } else {
-        setMessages(msgs);
+      if (data) {
+        if (data.length === 0) {
+          setMessages([{ id: 'welcome', role: 'ai', content: 'Hello! I am your Study Buddy. Ask me anything, or upload a PDF/Image for analysis.' }]);
+        } else {
+          setMessages(data);
+        }
       }
-    });
+    };
 
-    return () => unsubscribe();
+    fetchMessages();
   }, [chatId]);
 
   useEffect(() => {

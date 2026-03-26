@@ -5,15 +5,14 @@ import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight, Trophy, Clo
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useEffect, useState } from 'react';
-import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { supabase } from '../supabaseClient';
 
 interface QuizScore {
   id: string;
   topic: string;
   score: number;
   total: number;
-  timestamp: any;
+  timestamp: string;
 }
 
 export function Dashboard() {
@@ -26,24 +25,23 @@ export function Dashboard() {
   useEffect(() => {
     if (!user) return;
 
-    const scoresRef = collection(db, 'quiz_scores');
-    const q = query(
-      scoresRef, 
-      where('userId', '==', user.uid), 
-      orderBy('timestamp', 'desc'), 
-      limit(5)
-    );
+    const fetchScores = async () => {
+      const { data, error } = await supabase
+        .from('quiz_scores')
+        .select('*')
+        .eq('userId', user.id)
+        .order('timestamp', { ascending: false })
+        .limit(5);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const scores = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as QuizScore[];
-      setRecentScores(scores);
+      if (error) {
+        console.error('Error fetching scores:', error);
+      } else {
+        setRecentScores(data || []);
+      }
       setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchScores();
   }, [user]);
 
   const tools = [
@@ -174,7 +172,7 @@ export function Dashboard() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white truncate">{score.topic}</p>
                     <p className="text-[10px] text-gray-500">
-                      {score.timestamp?.toDate().toLocaleDateString()}
+                      {new Date(score.timestamp).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
