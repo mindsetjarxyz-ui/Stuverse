@@ -39,7 +39,7 @@ export const Pricing: React.FC = () => {
         ],
         checkout: true,
         tags: {
-          userId: user.uid,
+          userId: user.id,
           plan: planName
         }
       });

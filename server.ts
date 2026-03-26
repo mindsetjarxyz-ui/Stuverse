@@ -3,7 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import Stripe from 'stripe';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
-import * as admin from 'firebase-admin';
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bodyParser from 'body-parser';
@@ -12,16 +12,10 @@ import cors from 'cors';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// Initialize Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId,
-  });
-}
-
-const db = admin.firestore();
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Stripe Client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -57,11 +51,14 @@ async function startServer() {
 
       if (userId && plan) {
         const dailyCredits = plan === 'plus' ? 500 : plan === 'pro' ? 200 : 80;
-        await db.collection('users').doc(userId).update({
-          plan: plan,
-          credits: dailyCredits,
-          lastRenewalDate: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        await supabase
+          .from('users')
+          .update({
+            plan: plan,
+            credits: dailyCredits,
+            lastRenewalDate: new Date().toISOString(),
+          })
+          .eq('id', userId);
         console.log(`User ${userId} upgraded to ${plan} via Stripe`);
       }
     }
@@ -94,11 +91,14 @@ async function startServer() {
 
       if (userId && plan) {
         const dailyCredits = plan === 'plus' ? 500 : plan === 'pro' ? 200 : 80;
-        await db.collection('users').doc(userId).update({
-          plan: plan,
-          credits: dailyCredits,
-          lastRenewalDate: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        await supabase
+          .from('users')
+          .update({
+            plan: plan,
+            credits: dailyCredits,
+            lastRenewalDate: new Date().toISOString(),
+          })
+          .eq('id', userId);
         console.log(`User ${userId} upgraded to ${plan} via Razorpay`);
       }
     }
@@ -135,11 +135,14 @@ async function startServer() {
 
           if (userId && plan) {
             const dailyCredits = plan === 'plus' ? 500 : plan === 'pro' ? 200 : 80;
-            await db.collection('users').doc(userId).update({
-              plan: plan,
-              credits: dailyCredits,
-              lastRenewalDate: admin.firestore.FieldValue.serverTimestamp(),
-            });
+            await supabase
+              .from('users')
+              .update({
+                plan: plan,
+                credits: dailyCredits,
+                lastRenewalDate: new Date().toISOString(),
+              })
+              .eq('id', userId);
             console.log(`User ${userId} upgraded to ${plan} via FastSpring (${event.type})`);
           }
         }

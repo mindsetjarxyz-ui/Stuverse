@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../supabaseClient';
 
 export type Plan = 'free' | 'pro' | 'plus';
 export type Language = 'en' | 'bn' | 'hi' | 'es';
@@ -28,7 +27,7 @@ interface AppState {
   setLanguage: (lang: Language) => void;
   addRecentTool: (tool: string) => void;
   updateQuizAccuracy: (score: number, total: number) => void;
-  syncWithFirestore: (userId: string) => Promise<void>;
+  syncWithDatabase: (userId: string) => Promise<void>;
   
   showConfirm: (message: string, onConfirm: () => void) => void;
   showAlert: (message: string) => void;
@@ -102,13 +101,17 @@ export const useAppStore = create<AppState>()(
         };
       }),
 
-      syncWithFirestore: async (userId) => {
+      syncWithDatabase: async (userId) => {
         try {
-          const userDoc = await getDoc(doc(db, 'users', userId));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+          if (data && !error) {
             const today = new Date().toISOString().split('T')[0];
-            const lastRenewal = data.lastRenewalDate ? new Date(data.lastRenewalDate.seconds * 1000).toISOString().split('T')[0] : '';
+            const lastRenewal = data.lastRenewalDate ? new Date(data.lastRenewalDate).toISOString().split('T')[0] : '';
             
             let currentCredits = data.credits ?? DAILY_FREE_CREDITS;
             let currentPlan = data.plan ?? 'free';
@@ -118,10 +121,13 @@ export const useAppStore = create<AppState>()(
               else if (currentPlan === 'pro') currentCredits = DAILY_PRO_CREDITS;
               else currentCredits = DAILY_FREE_CREDITS;
 
-              await updateDoc(doc(db, 'users', userId), {
-                credits: currentCredits,
-                lastRenewalDate: serverTimestamp()
-              });
+              await supabase
+                .from('users')
+                .update({
+                  credits: currentCredits,
+                  lastRenewalDate: new Date().toISOString()
+                })
+                .eq('id', userId);
             }
 
             set({
@@ -131,7 +137,7 @@ export const useAppStore = create<AppState>()(
             });
           }
         } catch (error) {
-          console.error('Error syncing with Firestore:', error);
+          console.error('Error syncing with Database:', error);
         }
       },
       

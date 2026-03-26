@@ -7,8 +7,7 @@ import { generateQuiz } from '../services/ai';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
-import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Question {
@@ -64,14 +63,19 @@ export const Quizverse: React.FC = () => {
     try {
       const generatedQuestions = await generateQuiz(topic, count, difficulty, language);
       if (generatedQuestions && generatedQuestions.length > 0) {
-        // Deduct credits in Firestore
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const currentCredits = userSnap.data().credits || 0;
-          await updateDoc(userRef, {
-            credits: Math.max(0, currentCredits - cost)
-          });
+        // Deduct credits in Supabase
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('credits')
+          .eq('id', user.id)
+          .single();
+
+        if (!userError && userData) {
+          const currentCredits = userData.credits || 0;
+          await supabase
+            .from('users')
+            .update({ credits: Math.max(0, currentCredits - cost) })
+            .eq('id', user.id);
           useCredits(cost); // Sync local state
         }
 
@@ -123,15 +127,14 @@ export const Quizverse: React.FC = () => {
     } else {
       updateQuizAccuracy(score, questions?.length || 0);
       
-      // Save score to Firestore
+      // Save score to Supabase
       if (user) {
         try {
-          await addDoc(collection(db, 'quiz_scores'), {
-            userId: user.uid,
+          await supabase.from('quiz_scores').insert({
+            userId: user.id,
             topic,
             score,
             total: questions?.length || 0,
-            timestamp: serverTimestamp()
           });
         } catch (error) {
           console.error('Error saving quiz score:', error);

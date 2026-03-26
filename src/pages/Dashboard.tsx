@@ -102,7 +102,7 @@ export function Dashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-heading font-semibold tracking-tight text-white mb-2">
-              Welcome back{user?.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}
+              Welcome back{user?.user_metadata?.full_name ? `, ${user.user_metadata.full_name.split(' ')[0]}` : ''}
             </h1>
             <p className="text-gray-400 text-lg">
               You have <span className="text-emerald-400 font-medium">{credits} credits</span> remaining today on your <span className="capitalize text-gray-200 font-medium">{plan === 'free' ? t.free_plan : plan === 'pro' ? t.pro_plan : t.plus_plan}</span>.
