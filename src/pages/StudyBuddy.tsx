@@ -120,14 +120,20 @@ export const StudyBuddy: React.FC = () => {
     let currentChatId = chatId;
     if (!currentChatId) {
       // Create initial chat session
-      const chatsRef = collection(db, 'chats');
-      const docRef = await addDoc(chatsRef, {
-        userId: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        title: 'New Chat'
-      });
-      currentChatId = docRef.id;
+      const { data: newChat, error } = await supabase
+        .from('chats')
+        .insert({
+          userId: user.id,
+          title: 'New Chat'
+        })
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error creating chat:', error);
+        return;
+      }
+      currentChatId = newChat.id;
       setChatId(currentChatId);
     }
     
@@ -141,41 +147,77 @@ export const StudyBuddy: React.FC = () => {
     const promptText = input.trim();
     const currentFile = selectedFile;
 
-    // Deduct credits in Firestore
-    const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const currentCredits = userSnap.data().credits || 0;
-      await updateDoc(userRef, {
-        credits: Math.max(0, currentCredits - cost)
-      });
-      useCredits(cost); // Sync local state
-    }
-
-    // Save user message to Firestore
-    const messagesRef = collection(db, 'chats', currentChatId, 'messages');
-    await addDoc(messagesRef, {
+    // Optimistically update UI with user message
+    const tempUserMsgId = `temp-user-${Date.now()}`;
+    const optimisticUserMsg: Message = {
+      id: tempUserMsgId,
       role: 'user',
       content: promptText || 'Analyze this document.',
-      file: currentFile || null,
-      timestamp: serverTimestamp()
+      file: currentFile || undefined,
+    };
+    
+    setMessages(prev => {
+      const filtered = prev.filter(m => m.id !== 'welcome');
+      return [...filtered, optimisticUserMsg];
     });
-
-    // Update chat title if it's the first message
-    if (messages && messages.length <= 1 && promptText) {
-      await updateDoc(doc(db, 'chats', currentChatId), {
-        title: promptText.slice(0, 30) + (promptText.length > 30 ? '...' : ''),
-        updatedAt: serverTimestamp()
-      });
-    } else if (currentChatId) {
-      await updateDoc(doc(db, 'chats', currentChatId), {
-        updatedAt: serverTimestamp()
-      });
-    }
 
     setInput('');
     setSelectedFile(null);
     setIsTyping(true);
+
+    // Deduct credits in Supabase
+    const { data: userData } = await supabase
+      .from('users')
+      .select('credits')
+      .eq('id', user.id)
+      .single();
+      
+    if (userData) {
+      const currentCredits = userData.credits || 0;
+      await supabase
+        .from('users')
+        .update({ credits: Math.max(0, currentCredits - cost) })
+        .eq('id', user.id);
+      useCredits(cost); // Sync local state
+    }
+
+    // Save user message to Supabase
+    const { data: userMsg, error: msgError } = await supabase
+      .from('messages')
+      .insert({
+        chatId: currentChatId,
+        role: 'user',
+        content: promptText || 'Analyze this document.',
+        file: currentFile || null,
+        timestamp: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (msgError) {
+      console.error('Error saving message:', msgError);
+    } else if (userMsg) {
+      // Replace temp message with real one
+      setMessages(prev => prev.map(m => m.id === tempUserMsgId ? userMsg : m));
+    }
+
+    // Update chat title if it's the first message
+    if (messages && messages.length <= 1 && promptText) {
+      await supabase
+        .from('chats')
+        .update({
+          title: promptText.slice(0, 30) + (promptText.length > 30 ? '...' : ''),
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', currentChatId);
+    } else if (currentChatId) {
+      await supabase
+        .from('chats')
+        .update({
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', currentChatId);
+    }
 
     // Prepare history for Gemini
     const history = (messages || [])
@@ -194,25 +236,55 @@ export const StudyBuddy: React.FC = () => {
       }
 
       let fullResponse = '';
+      
+      // Create a temporary AI message for streaming
+      const tempAiMsgId = `temp-ai-${Date.now()}`;
+      setMessages(prev => [...prev, { id: tempAiMsgId, role: 'ai', content: '' }]);
+      
       for await (const chunk of stream) {
         fullResponse += chunk;
-        // We don't update local state here because onSnapshot will handle it once we save the final message
+        setMessages(prev => prev.map(m => m.id === tempAiMsgId ? { ...m, content: fullResponse } : m));
       }
 
-      // Save AI response to Firestore
-      await addDoc(messagesRef, {
-        role: 'ai',
-        content: fullResponse,
-        timestamp: serverTimestamp()
-      });
+      // Save AI response to Supabase
+      const { data: aiMsg } = await supabase
+        .from('messages')
+        .insert({
+          chatId: currentChatId,
+          role: 'ai',
+          content: fullResponse,
+          timestamp: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      if (aiMsg) {
+        setMessages(prev => prev.map(m => m.id === tempAiMsgId ? aiMsg : m));
+      }
 
     } catch (error) {
       console.error(error);
-      await addDoc(messagesRef, {
-        role: 'ai',
-        content: 'Sorry, I encountered an error processing your request.',
-        timestamp: serverTimestamp()
-      });
+      const errorText = 'Sorry, I encountered an error processing your request.';
+      
+      // Save error response to Supabase
+      const { data: errorMsg } = await supabase
+        .from('messages')
+        .insert({
+          chatId: currentChatId,
+          role: 'ai',
+          content: errorText,
+          timestamp: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      if (errorMsg) {
+        setMessages(prev => {
+          // Remove the temp streaming message if it exists, add the error message
+          const filtered = prev.filter(m => !m.id.toString().startsWith('temp-ai-'));
+          return [...filtered, errorMsg];
+        });
+      }
     } finally {
       setIsTyping(false);
     }
