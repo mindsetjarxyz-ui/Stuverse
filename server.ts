@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 
@@ -226,10 +227,24 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+    
+    // Explicit fallback for SPA routing in development
+    app.use((req, res, next) => {
+      if (req.method !== 'GET') return next();
+      
+      const url = req.originalUrl;
+      fs.promises.readFile(path.resolve(process.cwd(), 'index.html'), 'utf-8')
+        .then(template => vite.transformIndexHtml(url, template))
+        .then(template => res.status(200).set({ 'Content-Type': 'text/html' }).end(template))
+        .catch(e => {
+          vite.ssrFixStacktrace(e as Error);
+          next(e);
+        });
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

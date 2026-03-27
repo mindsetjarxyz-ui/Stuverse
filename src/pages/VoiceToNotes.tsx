@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2 } from 'lucide-react';
+import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2, Save, Link as LinkIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
-import { transcribeAudio } from '../services/ai';
+import { useAuth } from '../contexts/AuthContext';
+import { createSavedItem } from '../services/savedItems';
+import { transcribeAudio, generateNotesFromUrl } from '../services/ai';
+import { supabase } from '../supabaseClient';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
@@ -13,11 +16,16 @@ import { cn } from '../lib/utils';
 export const VoiceToNotes: React.FC = () => {
   const { t } = useTranslation();
   const { useCredits, addRecentTool, showAlert, language } = useAppStore();
+  const { user } = useAuth();
   
   const [isRecording, setIsRecording] = useState(false);
+  const [mode, setMode] = useState<'audio' | 'link'>('audio');
+  const [linkUrl, setLinkUrl] = useState('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
 
@@ -53,6 +61,7 @@ export const VoiceToNotes: React.FC = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
+        setUploadedFilePath(null);
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -87,6 +96,7 @@ export const VoiceToNotes: React.FC = () => {
 
     setAudioBlob(file);
     setAudioUrl(URL.createObjectURL(file));
+    setUploadedFilePath(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -96,7 +106,8 @@ export const VoiceToNotes: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!audioBlob) return;
+    if (mode === 'audio' && !audioBlob) return;
+    if (mode === 'link' && !linkUrl.trim()) return;
 
     const cost = 2;
     if (!useCredits(cost)) {
@@ -112,17 +123,36 @@ export const VoiceToNotes: React.FC = () => {
     }, 100);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64Data = (e.target?.result as string).split(',')[1];
-        const result = await transcribeAudio(base64Data, audioBlob.type, languageName);
+      if (mode === 'link') {
+        const result = await generateNotesFromUrl(linkUrl, languageName);
         setNotes(result || 'Failed to generate notes.');
         setIsGenerating(false);
-      };
-      reader.readAsDataURL(audioBlob);
+        return;
+      }
+
+      if (user && !uploadedFilePath && audioBlob) {
+        const ext = audioBlob.type.split('/')[1]?.split(';')[0] || 'webm';
+        const uuid = crypto.randomUUID();
+        const path = `${user.id}/voice_note/${uuid}.${ext}`;
+        const { data, error } = await supabase.storage.from('app-files').upload(path, audioBlob);
+        if (!error && data) {
+          setUploadedFilePath(data.path);
+        }
+      }
+
+      if (audioBlob) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const base64Data = (e.target?.result as string).split(',')[1];
+          const result = await transcribeAudio(base64Data, audioBlob.type, languageName);
+          setNotes(result || 'Failed to generate notes.');
+          setIsGenerating(false);
+        };
+        reader.readAsDataURL(audioBlob);
+      }
     } catch (error) {
       console.error(error);
-      setNotes('Sorry, an error occurred while transcribing the audio.');
+      setNotes('Sorry, an error occurred while transcribing.');
       setIsGenerating(false);
     }
   };
@@ -130,8 +160,24 @@ export const VoiceToNotes: React.FC = () => {
   const clearAudio = () => {
     setAudioBlob(null);
     setAudioUrl(null);
+    setUploadedFilePath(null);
     setNotes('');
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSave = async () => {
+    if (!user || !notes) return;
+    setIsSaving(true);
+    try {
+      const title = `Voice Note: ${new Date().toLocaleString()}`;
+      await createSavedItem(user.id, 'voice_note', title, notes, uploadedFilePath || undefined);
+      showAlert('Voice note saved successfully!');
+    } catch (error) {
+      console.error('Error saving voice note:', error);
+      showAlert('Failed to save voice note.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -160,75 +206,111 @@ export const VoiceToNotes: React.FC = () => {
           transition={{ delay: 0.1 }}
         >
           <Card className="space-y-6">
-            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border-glass rounded-2xl bg-bg-primary/50 space-y-6">
-              {isRecording ? (
-                <div className="flex flex-col items-center space-y-4">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
-                    <div className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center relative z-10">
-                      <StopCircle className="w-10 h-10 text-white cursor-pointer" onClick={stopRecording} />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-mono text-white font-bold">{formatTime(recordingTime)}</div>
-                  <p className="text-red-400 animate-pulse font-medium">Recording Lecture...</p>
-                </div>
-              ) : audioUrl ? (
-                <div className="w-full space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                        <Play className="w-5 h-5 text-emerald-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-white">Audio Ready</p>
-                        <p className="text-xs text-gray-500">{(audioBlob?.size || 0) / 1024 / 1024 < 1 ? `${Math.round((audioBlob?.size || 0) / 1024)} KB` : `${((audioBlob?.size || 0) / 1024 / 1024).toFixed(2)} MB`}</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={clearAudio}
-                      className="p-2 text-gray-500 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <audio src={audioUrl} controls className="w-full h-10" />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center space-y-6 w-full">
-                  <button 
-                    onClick={startRecording}
-                    className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all group"
-                  >
-                    <Mic className="w-10 h-10 text-gray-400 group-hover:text-white transition-colors" />
-                  </button>
-                  <p className="text-gray-400 text-center">Click to start recording or upload a file below</p>
-                  
-                  <div className="w-full pt-4 border-t border-border-glass">
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept="audio/*"
-                      onChange={handleFileUpload}
-                    />
-                    <Button 
-                      variant="secondary" 
-                      className="w-full"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload Audio File
-                    </Button>
-                  </div>
-                </div>
-              )}
+            <div className="flex p-1 rounded-xl bg-bg-primary border border-border-glass">
+              <button
+                onClick={() => setMode('audio')}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
+                  mode === 'audio' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <Mic className="w-4 h-4" /> Audio
+              </button>
+              <button
+                onClick={() => setMode('link')}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
+                  mode === 'link' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <LinkIcon className="w-4 h-4" /> Link
+              </button>
             </div>
+
+            {mode === 'audio' ? (
+              <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border-glass rounded-2xl bg-bg-primary/50 space-y-6">
+                {isRecording ? (
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
+                      <div className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center relative z-10">
+                        <StopCircle className="w-10 h-10 text-white cursor-pointer" onClick={stopRecording} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-mono text-white font-bold">{formatTime(recordingTime)}</div>
+                    <p className="text-red-400 animate-pulse font-medium">Recording Lecture...</p>
+                  </div>
+                ) : audioUrl ? (
+                  <div className="w-full space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <Play className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">Audio Ready</p>
+                          <p className="text-xs text-gray-500">{(audioBlob?.size || 0) / 1024 / 1024 < 1 ? `${Math.round((audioBlob?.size || 0) / 1024)} KB` : `${((audioBlob?.size || 0) / 1024 / 1024).toFixed(2)} MB`}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={clearAudio}
+                        className="p-2 text-gray-500 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <audio src={audioUrl} controls className="w-full h-10" />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center space-y-6 w-full">
+                    <button 
+                      onClick={startRecording}
+                      className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all group"
+                    >
+                      <Mic className="w-10 h-10 text-gray-400 group-hover:text-white transition-colors" />
+                    </button>
+                    <p className="text-gray-400 text-center">Click to start recording or upload a file below</p>
+                    
+                    <div className="w-full pt-4 border-t border-border-glass">
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept="audio/*"
+                        onChange={handleFileUpload}
+                      />
+                      <Button 
+                        variant="secondary" 
+                        className="w-full"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Audio File
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-300">
+                  Paste URL (e.g., YouTube video, article)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Button 
                 className="w-full bg-white text-black hover:bg-gray-200 border-none"
                 onClick={handleGenerate}
-                disabled={isGenerating || !audioBlob || isRecording}
+                disabled={isGenerating || (mode === 'audio' ? !audioBlob : !linkUrl.trim()) || isRecording}
               >
                 {isGenerating ? (
                   <>
@@ -257,17 +339,28 @@ export const VoiceToNotes: React.FC = () => {
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-glass">
               <h3 className="font-heading font-semibold text-white">Lecture Notes</h3>
               {notes && (
-                <Button 
-                  variant="ghost" 
-                  className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
-                  onClick={() => {
-                    navigator.clipboard.writeText(notes);
-                    showAlert('Copied to clipboard!');
-                  }}
-                >
-                  <Copy className="w-3 h-3 mr-1" />
-                  Copy
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                    onClick={() => {
+                      navigator.clipboard.writeText(notes);
+                      showAlert('Copied to clipboard!');
+                    }}
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Copy
+                  </Button>
+                </div>
               )}
             </div>
             

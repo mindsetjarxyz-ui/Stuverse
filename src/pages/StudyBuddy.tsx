@@ -15,8 +15,47 @@ interface Message {
   id: string;
   role: 'user' | 'ai';
   content: string;
-  file?: { name: string; type: 'pdf' | 'image'; data: string; mimeType: string };
+  file?: { name: string; type: 'pdf' | 'image'; data?: string; mimeType: string; path?: string };
 }
+
+const FileDisplay = ({ file }: { file: NonNullable<Message['file']> }) => {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (file.path) {
+      const fetchUrl = async () => {
+        const { data } = await supabase.storage.from('app-files').createSignedUrl(file.path, 3600);
+        if (data) setUrl(data.signedUrl);
+      };
+      fetchUrl();
+    } else if (file.data) {
+      try {
+        const byteCharacters = atob(file.data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: file.mimeType });
+        setUrl(URL.createObjectURL(blob));
+      } catch (e) {
+        console.error('Error creating blob from base64', e);
+      }
+    }
+  }, [file]);
+
+  return (
+    <a 
+      href={url || '#'} 
+      target="_blank" 
+      rel="noopener noreferrer" 
+      className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-black/20 border border-white/5 text-sm hover:bg-black/40 transition-colors w-fit"
+    >
+      {file.type === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> : <ImageIcon className="w-4 h-4 text-blue-400" />}
+      <span className="truncate max-w-[200px] text-gray-300">{file.name}</span>
+    </a>
+  );
+};
 
 export const StudyBuddy: React.FC = () => {
   const { t } = useTranslation();
@@ -26,7 +65,7 @@ export const StudyBuddy: React.FC = () => {
   const [chatId, setChatId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; type: 'pdf' | 'image'; data: string; mimeType: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; type: 'pdf' | 'image'; data: string; mimeType: string; rawFile?: File } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,7 +146,8 @@ export const StudyBuddy: React.FC = () => {
         name: file.name,
         type: file.type.includes('pdf') ? 'pdf' : 'image',
         data: base64Data,
-        mimeType: file.type
+        mimeType: file.type,
+        rawFile: file
       });
     };
     reader.readAsDataURL(file);
@@ -154,7 +194,7 @@ export const StudyBuddy: React.FC = () => {
       id: tempUserMsgId,
       role: 'user',
       content: promptText || 'Analyze this document.',
-      file: currentFile || undefined,
+      file: currentFile ? { name: currentFile.name, type: currentFile.type, data: currentFile.data, mimeType: currentFile.mimeType } : undefined,
     };
     
     setMessages(prev => {
@@ -182,6 +222,24 @@ export const StudyBuddy: React.FC = () => {
       useCredits(cost); // Sync local state
     }
 
+    // Upload file to Supabase Storage if present
+    let uploadedFilePath = null;
+    if (currentFile && currentFile.rawFile) {
+      const ext = currentFile.name.split('.').pop();
+      const uuid = crypto.randomUUID();
+      const path = `${user.id}/study_buddy/${currentChatId}/${uuid}.${ext}`;
+      
+      const { data, error } = await supabase.storage.from('app-files').upload(path, currentFile.rawFile);
+      if (error) {
+        console.error('Error uploading file:', error);
+        showAlert('Failed to upload file.');
+        setIsTyping(false);
+        setMessages(prev => prev.filter(m => m.id !== tempUserMsgId));
+        return;
+      }
+      uploadedFilePath = data.path;
+    }
+
     // Save user message to Supabase
     const { data: userMsg, error: msgError } = await supabase
       .from('messages')
@@ -189,7 +247,7 @@ export const StudyBuddy: React.FC = () => {
         chatId: currentChatId,
         role: 'user',
         content: promptText || 'Analyze this document.',
-        file: currentFile || null,
+        file: currentFile ? { name: currentFile.name, type: currentFile.type, mimeType: currentFile.mimeType, path: uploadedFilePath } : null,
         timestamp: new Date().toISOString()
       })
       .select()
@@ -249,10 +307,12 @@ export const StudyBuddy: React.FC = () => {
 
     try {
       let stream;
+      const systemInstruction = "You are a strict Study Buddy AI. You must ONLY answer questions related to studies, academics, education, learning, and school subjects. If the user asks about anything else (like general chat, personal advice, unrelated topics, etc.), politely decline and remind them that you are a Study Buddy focused on academics.";
+      
       if (currentFile) {
-        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history, languageName);
+        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history, languageName, systemInstruction);
       } else {
-        stream = generateCompletionStream(promptText, history, languageName);
+        stream = generateCompletionStream(promptText, history, languageName, 'gemini-3.1-flash-lite-preview', systemInstruction);
       }
 
       let fullResponse = '';
@@ -351,12 +411,7 @@ export const StudyBuddy: React.FC = () => {
                 ? "bg-white/10 border border-white/20 text-gray-100" 
                 : "bg-white/5 border border-white/10 text-gray-300"
             )}>
-              {msg.file && (
-                <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-black/20 border border-white/5 text-sm">
-                  {msg.file.type === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> : <ImageIcon className="w-4 h-4 text-blue-400" />}
-                  <span className="truncate max-w-[200px] text-gray-300">{msg.file.name}</span>
-                </div>
-              )}
+              {msg.file && <FileDisplay file={msg.file} />}
               {msg.content ? (
                 <div className="markdown-body text-sm">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>

@@ -16,14 +16,15 @@ export const generateCompletion = async (prompt: string, language = 'English', m
   }
 };
 
-export const generateCompletionStream = async function* (prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', model = 'gemini-3.1-flash-lite-preview') {
+export const generateCompletionStream = async function* (prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', model = 'gemini-3.1-flash-lite-preview', systemInstruction?: string) {
   try {
     const responseStream = await ai.models.generateContentStream({
       model,
       contents: [
         ...history,
         { role: 'user', parts: [{ text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }] }
-      ]
+      ],
+      config: systemInstruction ? { systemInstruction } : undefined
     });
     for await (const chunk of responseStream) {
       yield chunk.text;
@@ -90,7 +91,7 @@ export const analyzeDocument = async (fileData: string, mimeType: string, prompt
   }
 };
 
-export const analyzeDocumentStream = async function* (fileData: string, mimeType: string, prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English') {
+export const analyzeDocumentStream = async function* (fileData: string, mimeType: string, prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', systemInstruction?: string) {
   try {
     const responseStream = await ai.models.generateContentStream({
       model: 'gemini-3.1-flash-lite-preview',
@@ -103,13 +104,30 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
             { text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }
           ]
         }
-      ]
+      ],
+      config: systemInstruction ? { systemInstruction } : undefined
     });
     for await (const chunk of responseStream) {
       yield chunk.text;
     }
   } catch (error) {
     console.error('Document Analysis Stream Error:', error);
+    throw error;
+  }
+};
+
+export const generateNotesFromUrl = async (url: string, language = 'English') => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite-preview',
+      contents: `Please analyze the content from this URL: ${url}\n\nProvide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.`,
+      config: {
+        tools: [{ urlContext: {} }]
+      }
+    });
+    return response.text;
+  } catch (error) {
+    console.error('URL Notes Generation Error:', error);
     throw error;
   }
 };

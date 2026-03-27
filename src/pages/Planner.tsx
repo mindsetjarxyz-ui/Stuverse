@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, Sparkles, Loader2 } from 'lucide-react';
+import { Calendar, Sparkles, Loader2, Copy, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
+import { useAuth } from '../contexts/AuthContext';
+import { createSavedItem } from '../services/savedItems';
 import { generateCompletionStream } from '../services/ai';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -12,12 +14,14 @@ import { Card } from '../components/ui/Card';
 export const Planner: React.FC = () => {
   const { t } = useTranslation();
   const { useCredits, addRecentTool, showAlert, language } = useAppStore();
+  const { user } = useAuth();
   
   const [subjects, setSubjects] = useState('');
   const [examDate, setExamDate] = useState('');
   const [dailyHours, setDailyHours] = useState('4');
   const [weakTopics, setWeakTopics] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [plan, setPlan] = useState('');
 
   const languageName = language === 'bn' ? 'Bengali' : language === 'hi' ? 'Hindi' : 'English';
@@ -57,6 +61,21 @@ Please provide a structured calendar grid or day-by-day breakdown, color-coded s
       setPlan('Sorry, an error occurred while generating the study plan.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user || !plan) return;
+    setIsSaving(true);
+    try {
+      const title = `Study Plan: ${subjects.substring(0, 20)}...`;
+      await createSavedItem(user.id, 'study_plan', title, plan);
+      showAlert('Study plan saved successfully!');
+    } catch (error) {
+      console.error('Error saving study plan:', error);
+      showAlert('Failed to save study plan.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -167,6 +186,30 @@ Please provide a structured calendar grid or day-by-day breakdown, color-coded s
           <Card className="min-h-[500px] border-white/10">
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-glass">
             <h3 className="font-heading font-semibold text-white">Your Study Plan</h3>
+            {plan && (
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                  onClick={() => {
+                    navigator.clipboard.writeText(plan);
+                    showAlert('Copied to clipboard!');
+                  }}
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  Copy
+                </Button>
+              </div>
+            )}
           </div>
           
           <div className="overflow-y-auto h-[calc(100%-4rem)]">
