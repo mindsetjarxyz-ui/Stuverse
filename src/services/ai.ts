@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+const ai = new GoogleGenAI({ apiKey });
 
 export const generateCompletion = async (prompt: string, language = 'English', model = 'gemini-3.1-flash-lite-preview') => {
   try {
@@ -61,7 +62,10 @@ export const generateQuiz = async (topic: string, count: number, difficulty: str
         }
       }
     });
-    return JSON.parse(response.text || '[]');
+    let text = response.text || '[]';
+    // Remove markdown code blocks if present
+    text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    return JSON.parse(text);
   } catch (error) {
     console.error('Quiz Generation Error:', error);
     throw error;

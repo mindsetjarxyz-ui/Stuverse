@@ -130,10 +130,11 @@ export const StudyBuddy: React.FC = () => {
         .single();
         
       if (error) {
-        console.error('Error creating chat:', error);
-        return;
+        console.error('Error creating chat (falling back to local):', error);
+        currentChatId = `local-chat-${Date.now()}`;
+      } else {
+        currentChatId = newChat.id;
       }
-      currentChatId = newChat.id;
       setChatId(currentChatId);
     }
     
@@ -219,13 +220,32 @@ export const StudyBuddy: React.FC = () => {
         .eq('id', currentChatId);
     }
 
-    // Prepare history for Gemini
-    const history = (messages || [])
+    // Prepare history for Gemini, ensuring alternating roles
+    const rawHistory = (messages || [])
       .filter(m => m.id !== 'welcome')
       .map(m => ({
         role: m.role === 'user' ? 'user' as const : 'model' as const,
         parts: [{ text: m.content }]
       }));
+      
+    const history: typeof rawHistory = [];
+    for (const msg of rawHistory) {
+      if (history.length > 0 && history[history.length - 1].role === msg.role) {
+        history[history.length - 1].parts[0].text += '\n\n' + msg.parts[0].text;
+      } else {
+        history.push(msg);
+      }
+    }
+    
+    // Ensure history doesn't end with 'user' because we are about to append a 'user' message
+    if (history.length > 0 && history[history.length - 1].role === 'user') {
+      history.push({ role: 'model', parts: [{ text: 'Acknowledged.' }] });
+    }
+    
+    // Ensure history starts with 'user'
+    if (history.length > 0 && history[0].role === 'model') {
+      history.unshift({ role: 'user', parts: [{ text: 'Hello' }] });
+    }
 
     try {
       let stream;
@@ -278,13 +298,11 @@ export const StudyBuddy: React.FC = () => {
         .select()
         .single();
         
-      if (errorMsg) {
-        setMessages(prev => {
-          // Remove the temp streaming message if it exists, add the error message
-          const filtered = prev.filter(m => !m.id.toString().startsWith('temp-ai-'));
-          return [...filtered, errorMsg];
-        });
-      }
+      setMessages(prev => {
+        // Remove the temp streaming message if it exists, add the error message
+        const filtered = prev.filter(m => !m.id.toString().startsWith('temp-ai-'));
+        return [...filtered, errorMsg || { id: `local-err-${Date.now()}`, role: 'ai', content: errorText }];
+      });
     } finally {
       setIsTyping(false);
     }
