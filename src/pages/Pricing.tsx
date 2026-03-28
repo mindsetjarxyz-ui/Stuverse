@@ -14,39 +14,13 @@ export const Pricing: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const handleUpgrade = async (planName: string, productPath: string) => {
+  const handleUpgrade = async (planName: string) => {
     if (!user) {
       showAlert('Please log in to upgrade your plan.');
       return;
     }
 
-    if (!productPath) {
-      showAlert('FastSpring Product Path not configured. Please check your environment variables.');
-      return;
-    }
-
-    try {
-      // FastSpring SBL (Storefront Builder Library)
-      // We push the product to the cart and trigger checkout
-      // We also pass the userId as a secure tag or session attribute if possible, 
-      // but for SBL we usually use 'tags' which are sent in the webhook.
-      (window as any).fastspring.builder.push({
-        products: [
-          {
-            path: productPath,
-            quantity: 1
-          }
-        ],
-        checkout: true,
-        tags: {
-          userId: user.id,
-          plan: planName
-        }
-      });
-    } catch (error: any) {
-      console.error('Upgrade Error:', error);
-      showAlert(`Failed to start upgrade process: ${error.message}`);
-    }
+    showAlert('Payment integration is currently disabled. Please contact support to upgrade.');
   };
 
   const pricing = [
@@ -82,7 +56,7 @@ export const Pricing: React.FC = () => {
         'Exclusive Beta Features'
       ],
       button: plan === 'pro' ? 'Current Plan' : plan === 'plus' ? 'Downgrade' : 'Upgrade to Pro',
-      action: () => handleUpgrade('pro', import.meta.env.VITE_FASTSPRING_PRO_PATH),
+      action: () => handleUpgrade('pro'),
       disabled: plan === 'pro',
       popular: true,
       tag: 'Best Selling'
@@ -103,7 +77,7 @@ export const Pricing: React.FC = () => {
         'Custom Study Templates'
       ],
       button: plan === 'plus' ? 'Current Plan' : 'Upgrade to Plus',
-      action: () => handleUpgrade('plus', import.meta.env.VITE_FASTSPRING_PLUS_PATH),
+      action: () => handleUpgrade('plus'),
       disabled: plan === 'plus',
       popular: false
     }

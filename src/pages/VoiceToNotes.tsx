@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2, Save, Link as LinkIcon } from 'lucide-react';
+import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
 import { useAuth } from '../contexts/AuthContext';
 import { createSavedItem } from '../services/savedItems';
-import { transcribeAudio, generateNotesFromUrl } from '../services/ai';
+import { generateNotesFromFile } from '../services/ai';
 import { supabase } from '../supabaseClient';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -19,10 +19,8 @@ export const VoiceToNotes: React.FC = () => {
   const { user } = useAuth();
   
   const [isRecording, setIsRecording] = useState(false);
-  const [mode, setMode] = useState<'audio' | 'link'>('audio');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [fileBlob, setFileBlob] = useState<Blob | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,8 +57,8 @@ export const VoiceToNotes: React.FC = () => {
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
+        setFileBlob(blob);
+        setFileUrl(URL.createObjectURL(blob));
         setUploadedFilePath(null);
         stream.getTracks().forEach(track => track.stop());
       };
@@ -89,13 +87,22 @@ export const VoiceToNotes: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('audio/')) {
-      showAlert('Please upload an audio file.');
+    const validTypes = [
+      'audio/', 
+      'video/', 
+      'application/pdf', 
+      'text/plain', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    const isValid = validTypes.some(type => file.type.startsWith(type) || file.type === type);
+
+    if (!isValid) {
+      showAlert('Please upload an audio, video, PDF, or text document.');
       return;
     }
 
-    setAudioBlob(file);
-    setAudioUrl(URL.createObjectURL(file));
+    setFileBlob(file);
+    setFileUrl(URL.createObjectURL(file));
     setUploadedFilePath(null);
   };
 
@@ -106,8 +113,7 @@ export const VoiceToNotes: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (mode === 'audio' && !audioBlob) return;
-    if (mode === 'link' && !linkUrl.trim()) return;
+    if (!fileBlob) return;
 
     const cost = 2;
     if (!useCredits(cost)) {
@@ -123,43 +129,36 @@ export const VoiceToNotes: React.FC = () => {
     }, 100);
 
     try {
-      if (mode === 'link') {
-        const result = await generateNotesFromUrl(linkUrl, languageName);
-        setNotes(result || 'Failed to generate notes.');
-        setIsGenerating(false);
-        return;
-      }
-
-      if (user && !uploadedFilePath && audioBlob) {
-        const ext = audioBlob.type.split('/')[1]?.split(';')[0] || 'webm';
+      if (user && !uploadedFilePath && fileBlob) {
+        const ext = fileBlob.type.split('/')[1]?.split(';')[0] || 'file';
         const uuid = crypto.randomUUID();
         const path = `${user.id}/voice_note/${uuid}.${ext}`;
-        const { data, error } = await supabase.storage.from('app-files').upload(path, audioBlob);
+        const { data, error } = await supabase.storage.from('app-files').upload(path, fileBlob);
         if (!error && data) {
           setUploadedFilePath(data.path);
         }
       }
 
-      if (audioBlob) {
+      if (fileBlob) {
         const reader = new FileReader();
         reader.onload = async (e) => {
           const base64Data = (e.target?.result as string).split(',')[1];
-          const result = await transcribeAudio(base64Data, audioBlob.type, languageName);
+          const result = await generateNotesFromFile(base64Data, fileBlob.type, languageName);
           setNotes(result || 'Failed to generate notes.');
           setIsGenerating(false);
         };
-        reader.readAsDataURL(audioBlob);
+        reader.readAsDataURL(fileBlob);
       }
     } catch (error) {
       console.error(error);
-      setNotes('Sorry, an error occurred while transcribing.');
+      setNotes('Sorry, an error occurred while generating notes.');
       setIsGenerating(false);
     }
   };
 
-  const clearAudio = () => {
-    setAudioBlob(null);
-    setAudioUrl(null);
+  const clearFile = () => {
+    setFileBlob(null);
+    setFileUrl(null);
     setUploadedFilePath(null);
     setNotes('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -195,7 +194,7 @@ export const VoiceToNotes: React.FC = () => {
           <Mic className="w-8 h-8 text-gray-300" />
         </motion.div>
         <h1 className="text-3xl font-heading font-bold text-white">Voice-to-Notes</h1>
-        <p className="text-gray-400">Record lectures or upload audio to get perfectly structured notes.</p>
+        <p className="text-gray-400">Record lectures or upload audio, video, or documents to get perfectly structured notes.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -206,116 +205,85 @@ export const VoiceToNotes: React.FC = () => {
           transition={{ delay: 0.1 }}
         >
           <Card className="space-y-6">
-            <div className="flex p-1 rounded-xl bg-bg-primary border border-border-glass">
-              <button
-                onClick={() => setMode('audio')}
-                className={cn(
-                  "flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
-                  mode === 'audio' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                )}
-              >
-                <Mic className="w-4 h-4" /> Audio
-              </button>
-              <button
-                onClick={() => setMode('link')}
-                className={cn(
-                  "flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
-                  mode === 'link' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200"
-                )}
-              >
-                <LinkIcon className="w-4 h-4" /> Link
-              </button>
-            </div>
-
-            {mode === 'audio' ? (
-              <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border-glass rounded-2xl bg-bg-primary/50 space-y-6">
-                {isRecording ? (
-                  <div className="flex flex-col items-center space-y-4">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
-                      <div className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center relative z-10">
-                        <StopCircle className="w-10 h-10 text-white cursor-pointer" onClick={stopRecording} />
+            <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border-glass rounded-2xl bg-bg-primary/50 space-y-6">
+              {isRecording ? (
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
+                    <div className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center relative z-10">
+                      <StopCircle className="w-10 h-10 text-white cursor-pointer" onClick={stopRecording} />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-mono text-white font-bold">{formatTime(recordingTime)}</div>
+                  <p className="text-red-400 animate-pulse font-medium">Recording Lecture...</p>
+                </div>
+              ) : fileUrl ? (
+                <div className="w-full space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <Play className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">File Ready</p>
+                        <p className="text-xs text-gray-500">{(fileBlob?.size || 0) / 1024 / 1024 < 1 ? `${Math.round((fileBlob?.size || 0) / 1024)} KB` : `${((fileBlob?.size || 0) / 1024 / 1024).toFixed(2)} MB`}</p>
                       </div>
                     </div>
-                    <div className="text-2xl font-mono text-white font-bold">{formatTime(recordingTime)}</div>
-                    <p className="text-red-400 animate-pulse font-medium">Recording Lecture...</p>
-                  </div>
-                ) : audioUrl ? (
-                  <div className="w-full space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <Play className="w-5 h-5 text-emerald-400" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">Audio Ready</p>
-                          <p className="text-xs text-gray-500">{(audioBlob?.size || 0) / 1024 / 1024 < 1 ? `${Math.round((audioBlob?.size || 0) / 1024)} KB` : `${((audioBlob?.size || 0) / 1024 / 1024).toFixed(2)} MB`}</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={clearAudio}
-                        className="p-2 text-gray-500 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <audio src={audioUrl} controls className="w-full h-10" />
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center space-y-6 w-full">
                     <button 
-                      onClick={startRecording}
-                      className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all group"
+                      onClick={clearFile}
+                      className="p-2 text-gray-500 hover:text-red-400 transition-colors"
                     >
-                      <Mic className="w-10 h-10 text-gray-400 group-hover:text-white transition-colors" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
-                    <p className="text-gray-400 text-center">Click to start recording or upload a file below</p>
-                    
-                    <div className="w-full pt-4 border-t border-border-glass">
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept="audio/*"
-                        onChange={handleFileUpload}
-                      />
-                      <Button 
-                        variant="secondary" 
-                        className="w-full"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        Upload Audio File
-                      </Button>
-                    </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <label className="block text-sm font-medium text-gray-300">
-                  Paste URL (e.g., YouTube video, article)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                />
-              </div>
-            )}
+                  {fileBlob?.type.startsWith('audio/') && (
+                    <audio src={fileUrl} controls className="w-full h-10" />
+                  )}
+                  {fileBlob?.type.startsWith('video/') && (
+                    <video src={fileUrl} controls className="w-full h-40 rounded-lg bg-black/20" />
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center space-y-6 w-full">
+                  <button 
+                    onClick={startRecording}
+                    className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all group"
+                  >
+                    <Mic className="w-10 h-10 text-gray-400 group-hover:text-white transition-colors" />
+                  </button>
+                  <p className="text-gray-400 text-center">Click to start recording or upload a file below</p>
+                  
+                  <div className="w-full pt-4 border-t border-border-glass">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="audio/*,video/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={handleFileUpload}
+                    />
+                    <Button 
+                      variant="secondary" 
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload File
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-2">
               <Button 
                 className="w-full bg-white text-black hover:bg-gray-200 border-none"
                 onClick={handleGenerate}
-                disabled={isGenerating || (mode === 'audio' ? !audioBlob : !linkUrl.trim()) || isRecording}
+                disabled={isGenerating || !fileBlob || isRecording}
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Transcribing...
+                    Generating...
                   </>
                 ) : (
                   <>

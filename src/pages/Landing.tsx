@@ -235,7 +235,7 @@ export function Landing() {
               </Link>
             ) : (
               <>
-                <button onClick={() => handleLoginClick(false)} className="hidden md:block text-sm font-medium text-gray-300 hover:text-white transition-colors">
+                <button onClick={() => handleLoginClick(false)} className="hidden md:block px-5 py-2.5 glass-pill text-white text-sm font-semibold hover:text-white transition-colors">
                   Login
                 </button>
                 <button onClick={() => handleLoginClick(true)} className="px-5 py-2.5 glass-pill text-white text-sm font-semibold hover:text-white transition-colors">

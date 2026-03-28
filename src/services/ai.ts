@@ -116,36 +116,20 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
   }
 };
 
-export const generateNotesFromUrl = async (url: string, language = 'English') => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
-      contents: `Please analyze the content from this URL: ${url}\n\nProvide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.`,
-      config: {
-        tools: [{ urlContext: {} }]
-      }
-    });
-    return response.text;
-  } catch (error) {
-    console.error('URL Notes Generation Error:', error);
-    throw error;
-  }
-};
-
-export const transcribeAudio = async (audioData: string, mimeType: string, language = 'English') => {
+export const generateNotesFromFile = async (fileData: string, mimeType: string, language = 'English') => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',
       contents: {
         parts: [
-          { inlineData: { data: audioData, mimeType } },
-          { text: `Please transcribe this lecture audio and then provide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.` }
+          { inlineData: { data: fileData, mimeType } },
+          { text: `Please analyze this file (audio, video, or document) and provide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.` }
         ]
       }
     });
     return response.text;
   } catch (error) {
-    console.error('Audio Transcription Error:', error);
+    console.error('File Notes Generation Error:', error);
     throw error;
   }
 };
