@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const generateCompletion = async (prompt: string, language = 'English', model = 'gemini-3.1-flash-lite-preview') => {
   try {
@@ -16,15 +15,14 @@ export const generateCompletion = async (prompt: string, language = 'English', m
   }
 };
 
-export const generateCompletionStream = async function* (prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', model = 'gemini-3.1-flash-lite-preview', systemInstruction?: string) {
+export const generateCompletionStream = async function* (prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', model = 'gemini-3.1-flash-lite-preview') {
   try {
     const responseStream = await ai.models.generateContentStream({
       model,
       contents: [
         ...history,
         { role: 'user', parts: [{ text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }] }
-      ],
-      config: systemInstruction ? { systemInstruction } : undefined
+      ]
     });
     for await (const chunk of responseStream) {
       yield chunk.text;
@@ -63,10 +61,7 @@ export const generateQuiz = async (topic: string, count: number, difficulty: str
         }
       }
     });
-    let text = response.text || '[]';
-    // Remove markdown code blocks if present
-    text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    return JSON.parse(text);
+    return JSON.parse(response.text || '[]');
   } catch (error) {
     console.error('Quiz Generation Error:', error);
     throw error;
@@ -91,7 +86,7 @@ export const analyzeDocument = async (fileData: string, mimeType: string, prompt
   }
 };
 
-export const analyzeDocumentStream = async function* (fileData: string, mimeType: string, prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English', systemInstruction?: string) {
+export const analyzeDocumentStream = async function* (fileData: string, mimeType: string, prompt: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [], language = 'English') {
   try {
     const responseStream = await ai.models.generateContentStream({
       model: 'gemini-3.1-flash-lite-preview',
@@ -104,8 +99,7 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
             { text: `${prompt}\n\nIMPORTANT: Please respond in ${language}.` }
           ]
         }
-      ],
-      config: systemInstruction ? { systemInstruction } : undefined
+      ]
     });
     for await (const chunk of responseStream) {
       yield chunk.text;
@@ -116,20 +110,20 @@ export const analyzeDocumentStream = async function* (fileData: string, mimeType
   }
 };
 
-export const generateNotesFromFile = async (fileData: string, mimeType: string, language = 'English') => {
+export const transcribeAudio = async (audioData: string, mimeType: string, language = 'English') => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',
       contents: {
         parts: [
-          { inlineData: { data: fileData, mimeType } },
-          { text: `Please analyze this file (audio, video, or document) and provide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.` }
+          { inlineData: { data: audioData, mimeType } },
+          { text: `Please transcribe this lecture audio and then provide a well-structured, bullet-point summary of the key notes. Use Markdown for formatting. Include a 'Summary' section and a 'Key Takeaways' section. IMPORTANT: Please respond in ${language}.` }
         ]
       }
     });
     return response.text;
   } catch (error) {
-    console.error('File Notes Generation Error:', error);
+    console.error('Audio Transcription Error:', error);
     throw error;
   }
 };

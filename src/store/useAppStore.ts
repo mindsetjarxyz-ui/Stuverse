@@ -39,20 +39,12 @@ const DAILY_FREE_CREDITS = 80;
 const DAILY_PRO_CREDITS = 200;
 const DAILY_PLUS_CREDITS = 500;
 
-const getLocalDateString = (dateInput?: string | Date) => {
-  const date = dateInput ? new Date(dateInput) : new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       plan: 'free',
       credits: DAILY_FREE_CREDITS,
-      lastClaimDate: getLocalDateString(),
+      lastClaimDate: new Date().toISOString().split('T')[0],
       streak: 1,
       language: 'en',
       recentTools: [],
@@ -63,7 +55,7 @@ export const useAppStore = create<AppState>()(
       alertDialog: null,
 
       claimDailyCredits: () => {
-        const today = getLocalDateString();
+        const today = new Date().toISOString().split('T')[0];
         const { lastClaimDate, plan, streak } = get();
         
         if (today !== lastClaimDate) {
@@ -118,8 +110,8 @@ export const useAppStore = create<AppState>()(
             .single();
 
           if (data && !error) {
-            const today = getLocalDateString();
-            const lastRenewal = data.lastRenewalDate ? getLocalDateString(data.lastRenewalDate) : '';
+            const today = new Date().toISOString().split('T')[0];
+            const lastRenewal = data.lastRenewalDate ? new Date(data.lastRenewalDate).toISOString().split('T')[0] : '';
             
             let currentCredits = data.credits ?? DAILY_FREE_CREDITS;
             let currentPlan = data.plan ?? 'free';

@@ -15,47 +15,8 @@ interface Message {
   id: string;
   role: 'user' | 'ai';
   content: string;
-  file?: { name: string; type: 'pdf' | 'image'; data?: string; mimeType: string; path?: string };
+  file?: { name: string; type: 'pdf' | 'image'; data: string; mimeType: string };
 }
-
-const FileDisplay = ({ file }: { file: NonNullable<Message['file']> }) => {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (file.path) {
-      const fetchUrl = async () => {
-        const { data } = await supabase.storage.from('app-files').createSignedUrl(file.path, 3600);
-        if (data) setUrl(data.signedUrl);
-      };
-      fetchUrl();
-    } else if (file.data) {
-      try {
-        const byteCharacters = atob(file.data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: file.mimeType });
-        setUrl(URL.createObjectURL(blob));
-      } catch (e) {
-        console.error('Error creating blob from base64', e);
-      }
-    }
-  }, [file]);
-
-  return (
-    <a 
-      href={url || '#'} 
-      target="_blank" 
-      rel="noopener noreferrer" 
-      className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-black/20 border border-white/5 text-sm hover:bg-black/40 transition-colors w-fit"
-    >
-      {file.type === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> : <ImageIcon className="w-4 h-4 text-blue-400" />}
-      <span className="truncate max-w-[200px] text-gray-300">{file.name}</span>
-    </a>
-  );
-};
 
 export const StudyBuddy: React.FC = () => {
   const { t } = useTranslation();
@@ -65,7 +26,7 @@ export const StudyBuddy: React.FC = () => {
   const [chatId, setChatId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; type: 'pdf' | 'image'; data: string; mimeType: string; rawFile?: File } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; type: 'pdf' | 'image'; data: string; mimeType: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -146,8 +107,7 @@ export const StudyBuddy: React.FC = () => {
         name: file.name,
         type: file.type.includes('pdf') ? 'pdf' : 'image',
         data: base64Data,
-        mimeType: file.type,
-        rawFile: file
+        mimeType: file.type
       });
     };
     reader.readAsDataURL(file);
@@ -160,21 +120,14 @@ export const StudyBuddy: React.FC = () => {
     let currentChatId = chatId;
     if (!currentChatId) {
       // Create initial chat session
-      const { data: newChat, error } = await supabase
-        .from('chats')
-        .insert({
-          userId: user.id,
-          title: 'New Chat'
-        })
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('Error creating chat (falling back to local):', error);
-        currentChatId = `local-chat-${Date.now()}`;
-      } else {
-        currentChatId = newChat.id;
-      }
+      const chatsRef = collection(db, 'chats');
+      const docRef = await addDoc(chatsRef, {
+        userId: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        title: 'New Chat'
+      });
+      currentChatId = docRef.id;
       setChatId(currentChatId);
     }
     
@@ -188,180 +141,77 @@ export const StudyBuddy: React.FC = () => {
     const promptText = input.trim();
     const currentFile = selectedFile;
 
-    // Optimistically update UI with user message
-    const tempUserMsgId = `temp-user-${Date.now()}`;
-    const optimisticUserMsg: Message = {
-      id: tempUserMsgId,
+    // Deduct credits in Firestore
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const currentCredits = userSnap.data().credits || 0;
+      await updateDoc(userRef, {
+        credits: Math.max(0, currentCredits - cost)
+      });
+      useCredits(cost); // Sync local state
+    }
+
+    // Save user message to Firestore
+    const messagesRef = collection(db, 'chats', currentChatId, 'messages');
+    await addDoc(messagesRef, {
       role: 'user',
       content: promptText || 'Analyze this document.',
-      file: currentFile ? { name: currentFile.name, type: currentFile.type, data: currentFile.data, mimeType: currentFile.mimeType } : undefined,
-    };
-    
-    setMessages(prev => {
-      const filtered = prev.filter(m => m.id !== 'welcome');
-      return [...filtered, optimisticUserMsg];
+      file: currentFile || null,
+      timestamp: serverTimestamp()
     });
+
+    // Update chat title if it's the first message
+    if (messages && messages.length <= 1 && promptText) {
+      await updateDoc(doc(db, 'chats', currentChatId), {
+        title: promptText.slice(0, 30) + (promptText.length > 30 ? '...' : ''),
+        updatedAt: serverTimestamp()
+      });
+    } else if (currentChatId) {
+      await updateDoc(doc(db, 'chats', currentChatId), {
+        updatedAt: serverTimestamp()
+      });
+    }
 
     setInput('');
     setSelectedFile(null);
     setIsTyping(true);
 
-    // Deduct credits in Supabase
-    const { data: userData } = await supabase
-      .from('users')
-      .select('credits')
-      .eq('id', user.id)
-      .single();
-      
-    if (userData) {
-      const currentCredits = userData.credits || 0;
-      await supabase
-        .from('users')
-        .update({ credits: Math.max(0, currentCredits - cost) })
-        .eq('id', user.id);
-      useCredits(cost); // Sync local state
-    }
-
-    // Upload file to Supabase Storage if present
-    let uploadedFilePath = null;
-    if (currentFile && currentFile.rawFile) {
-      const ext = currentFile.name.split('.').pop();
-      const uuid = crypto.randomUUID();
-      const path = `${user.id}/study_buddy/${currentChatId}/${uuid}.${ext}`;
-      
-      const { data, error } = await supabase.storage.from('app-files').upload(path, currentFile.rawFile);
-      if (error) {
-        console.error('Error uploading file:', error);
-        showAlert('Failed to upload file.');
-        setIsTyping(false);
-        setMessages(prev => prev.filter(m => m.id !== tempUserMsgId));
-        return;
-      }
-      uploadedFilePath = data.path;
-    }
-
-    // Save user message to Supabase
-    const { data: userMsg, error: msgError } = await supabase
-      .from('messages')
-      .insert({
-        chatId: currentChatId,
-        role: 'user',
-        content: promptText || 'Analyze this document.',
-        file: currentFile ? { name: currentFile.name, type: currentFile.type, mimeType: currentFile.mimeType, path: uploadedFilePath } : null,
-        timestamp: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (msgError) {
-      console.error('Error saving message:', msgError);
-    } else if (userMsg) {
-      // Replace temp message with real one
-      setMessages(prev => prev.map(m => m.id === tempUserMsgId ? userMsg : m));
-    }
-
-    // Update chat title if it's the first message
-    if (messages && messages.length <= 1 && promptText) {
-      await supabase
-        .from('chats')
-        .update({
-          title: promptText.slice(0, 30) + (promptText.length > 30 ? '...' : ''),
-          updatedAt: new Date().toISOString()
-        })
-        .eq('id', currentChatId);
-    } else if (currentChatId) {
-      await supabase
-        .from('chats')
-        .update({
-          updatedAt: new Date().toISOString()
-        })
-        .eq('id', currentChatId);
-    }
-
-    // Prepare history for Gemini, ensuring alternating roles
-    const rawHistory = (messages || [])
+    // Prepare history for Gemini
+    const history = (messages || [])
       .filter(m => m.id !== 'welcome')
       .map(m => ({
         role: m.role === 'user' ? 'user' as const : 'model' as const,
         parts: [{ text: m.content }]
       }));
-      
-    const history: typeof rawHistory = [];
-    for (const msg of rawHistory) {
-      if (history.length > 0 && history[history.length - 1].role === msg.role) {
-        history[history.length - 1].parts[0].text += '\n\n' + msg.parts[0].text;
-      } else {
-        history.push(msg);
-      }
-    }
-    
-    // Ensure history doesn't end with 'user' because we are about to append a 'user' message
-    if (history.length > 0 && history[history.length - 1].role === 'user') {
-      history.push({ role: 'model', parts: [{ text: 'Acknowledged.' }] });
-    }
-    
-    // Ensure history starts with 'user'
-    if (history.length > 0 && history[0].role === 'model') {
-      history.unshift({ role: 'user', parts: [{ text: 'Hello' }] });
-    }
 
     try {
       let stream;
-      const systemInstruction = "You are a strict Study Buddy AI. You must ONLY answer questions related to studies, academics, education, learning, and school subjects. If the user asks about anything else (like general chat, personal advice, unrelated topics, etc.), politely decline and remind them that you are a Study Buddy focused on academics.";
-      
       if (currentFile) {
-        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history, languageName, systemInstruction);
+        stream = analyzeDocumentStream(currentFile.data, currentFile.mimeType, promptText || 'Analyze this document.', history, languageName);
       } else {
-        stream = generateCompletionStream(promptText, history, languageName, 'gemini-3.1-flash-lite-preview', systemInstruction);
+        stream = generateCompletionStream(promptText, history, languageName);
       }
 
       let fullResponse = '';
-      
-      // Create a temporary AI message for streaming
-      const tempAiMsgId = `temp-ai-${Date.now()}`;
-      setMessages(prev => [...prev, { id: tempAiMsgId, role: 'ai', content: '' }]);
-      
       for await (const chunk of stream) {
         fullResponse += chunk;
-        setMessages(prev => prev.map(m => m.id === tempAiMsgId ? { ...m, content: fullResponse } : m));
+        // We don't update local state here because onSnapshot will handle it once we save the final message
       }
 
-      // Save AI response to Supabase
-      const { data: aiMsg } = await supabase
-        .from('messages')
-        .insert({
-          chatId: currentChatId,
-          role: 'ai',
-          content: fullResponse,
-          timestamp: new Date().toISOString()
-        })
-        .select()
-        .single();
-        
-      if (aiMsg) {
-        setMessages(prev => prev.map(m => m.id === tempAiMsgId ? aiMsg : m));
-      }
+      // Save AI response to Firestore
+      await addDoc(messagesRef, {
+        role: 'ai',
+        content: fullResponse,
+        timestamp: serverTimestamp()
+      });
 
     } catch (error) {
       console.error(error);
-      const errorText = 'Sorry, I encountered an error processing your request.';
-      
-      // Save error response to Supabase
-      const { data: errorMsg } = await supabase
-        .from('messages')
-        .insert({
-          chatId: currentChatId,
-          role: 'ai',
-          content: errorText,
-          timestamp: new Date().toISOString()
-        })
-        .select()
-        .single();
-        
-      setMessages(prev => {
-        // Remove the temp streaming message if it exists, add the error message
-        const filtered = prev.filter(m => !m.id.toString().startsWith('temp-ai-'));
-        return [...filtered, errorMsg || { id: `local-err-${Date.now()}`, role: 'ai', content: errorText }];
+      await addDoc(messagesRef, {
+        role: 'ai',
+        content: 'Sorry, I encountered an error processing your request.',
+        timestamp: serverTimestamp()
       });
     } finally {
       setIsTyping(false);
@@ -411,7 +261,12 @@ export const StudyBuddy: React.FC = () => {
                 ? "bg-white/10 border border-white/20 text-gray-100" 
                 : "bg-white/5 border border-white/10 text-gray-300"
             )}>
-              {msg.file && <FileDisplay file={msg.file} />}
+              {msg.file && (
+                <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-black/20 border border-white/5 text-sm">
+                  {msg.file.type === 'pdf' ? <FileText className="w-4 h-4 text-red-400" /> : <ImageIcon className="w-4 h-4 text-blue-400" />}
+                  <span className="truncate max-w-[200px] text-gray-300">{msg.file.name}</span>
+                </div>
+              )}
               {msg.content ? (
                 <div className="markdown-body text-sm">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>

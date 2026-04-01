@@ -1,39 +1,11 @@
 import { useAppStore } from '../store/useAppStore';
 import { locales } from '../locales';
 import { motion } from 'motion/react';
-import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight, Trophy, Clock, TrendingUp, Mic, Zap, Bookmark, Trash2 } from 'lucide-react';
+import { MessageSquare, FileText, CheckSquare, Calendar, ArrowRight, Trophy, Clock, TrendingUp, Mic, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { getSavedItems, deleteSavedItem, SavedItem } from '../services/savedItems';
-import { Paperclip } from 'lucide-react';
-
-const FileLink = ({ filePath }: { filePath: string }) => {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchUrl = async () => {
-      const { data } = await supabase.storage.from('app-files').createSignedUrl(filePath, 3600);
-      if (data) setUrl(data.signedUrl);
-    };
-    fetchUrl();
-  }, [filePath]);
-
-  if (!url) return null;
-
-  return (
-    <a 
-      href={url} 
-      target="_blank" 
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors bg-blue-400/10 px-2 py-1 rounded w-fit"
-    >
-      <Paperclip className="w-3 h-3" />
-      View Attached File
-    </a>
-  );
-};
 
 interface QuizScore {
   id: string;
@@ -48,9 +20,7 @@ export function Dashboard() {
   const t = locales[language];
   const { user } = useAuth();
   const [recentScores, setRecentScores] = useState<QuizScore[]>([]);
-  const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingItems, setLoadingItems] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -71,29 +41,8 @@ export function Dashboard() {
       setLoading(false);
     };
 
-    const fetchSavedItems = async () => {
-      try {
-        const items = await getSavedItems(user.id);
-        setSavedItems(items.slice(0, 5));
-      } catch (error) {
-        console.error('Error fetching saved items:', error);
-      } finally {
-        setLoadingItems(false);
-      }
-    };
-
     fetchScores();
-    fetchSavedItems();
   }, [user]);
-
-  const handleDeleteItem = async (id: string) => {
-    try {
-      await deleteSavedItem(id);
-      setSavedItems(prev => prev.filter(item => item.id !== id));
-    } catch (error) {
-      console.error('Error deleting item:', error);
-    }
-  };
 
   const tools = [
     {
@@ -238,49 +187,6 @@ export function Dashboard() {
                 <CheckSquare className="w-8 h-8 text-gray-600 mx-auto mb-3" />
                 <p className="text-sm text-gray-500">No quizzes taken yet.</p>
                 <Link to="/quiz" className="text-xs text-white hover:underline mt-2 inline-block">Start your first quiz</Link>
-              </div>
-            )}
-          </div>
-
-          {/* Saved Items */}
-          <h2 className="text-xl font-heading font-semibold text-white flex items-center gap-2 mt-8">
-            <Bookmark className="w-5 h-5 text-blue-400" />
-            Saved Items
-          </h2>
-          <div className="glass-panel p-6 space-y-4">
-            {loadingItems ? (
-              <div className="flex items-center justify-center py-8">
-                <Clock className="w-6 h-6 text-gray-500 animate-spin" />
-              </div>
-            ) : savedItems.length > 0 ? (
-              <div className="space-y-4">
-                {savedItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">
-                          {item.type.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium text-white truncate">{item.title}</p>
-                      <p className="text-[10px] text-gray-500">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </p>
-                      {item.file_path && <FileLink filePath={item.file_path} />}
-                    </div>
-                    <button 
-                      onClick={() => handleDeleteItem(item.id)}
-                      className="p-2 text-gray-500 hover:text-red-400 transition-colors shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Bookmark className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-500">No saved items yet.</p>
               </div>
             )}
           </div>
