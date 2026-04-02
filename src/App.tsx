@@ -15,10 +15,12 @@ import { VoiceToNotes } from './pages/VoiceToNotes';
 import { Pricing } from './pages/Pricing';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { GlobalDialogs } from './components/GlobalDialogs';
 
 export default function App() {
   return (
     <AuthProvider>
+      <GlobalDialogs />
       <Router>
         <Routes>
           <Route path="/" element={<Landing />} />

@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2 } from 'lucide-react';
+import { Mic, Upload, Loader2, Sparkles, Copy, StopCircle, Play, Trash2, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
-import { transcribeAudio } from '../services/ai';
+import { useAuth } from '../contexts/AuthContext';
+import { createSavedItem } from '../services/savedItems';
+import { generateNotesFromFile } from '../services/ai';
+import { supabase } from '../supabaseClient';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
@@ -13,11 +16,14 @@ import { cn } from '../lib/utils';
 export const VoiceToNotes: React.FC = () => {
   const { t } = useTranslation();
   const { useCredits, addRecentTool, showAlert, language } = useAppStore();
+  const { user } = useAuth();
   
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [fileBlob, setFileBlob] = useState<Blob | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
 
@@ -51,8 +57,9 @@ export const VoiceToNotes: React.FC = () => {
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
+        setFileBlob(blob);
+        setFileUrl(URL.createObjectURL(blob));
+        setUploadedFilePath(null);
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -80,13 +87,23 @@ export const VoiceToNotes: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('audio/')) {
-      showAlert('Please upload an audio file.');
+    const validTypes = [
+      'audio/', 
+      'video/', 
+      'application/pdf', 
+      'text/plain', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    const isValid = validTypes.some(type => file.type.startsWith(type) || file.type === type);
+
+    if (!isValid) {
+      showAlert('Please upload an audio, video, PDF, or text document.');
       return;
     }
 
-    setAudioBlob(file);
-    setAudioUrl(URL.createObjectURL(file));
+    setFileBlob(file);
+    setFileUrl(URL.createObjectURL(file));
+    setUploadedFilePath(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -96,7 +113,7 @@ export const VoiceToNotes: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!audioBlob) return;
+    if (!fileBlob) return;
 
     const cost = 2;
     if (!useCredits(cost)) {
@@ -112,26 +129,54 @@ export const VoiceToNotes: React.FC = () => {
     }, 100);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64Data = (e.target?.result as string).split(',')[1];
-        const result = await transcribeAudio(base64Data, audioBlob.type, languageName);
-        setNotes(result || 'Failed to generate notes.');
-        setIsGenerating(false);
-      };
-      reader.readAsDataURL(audioBlob);
+      if (user && !uploadedFilePath && fileBlob) {
+        const ext = fileBlob.type.split('/')[1]?.split(';')[0] || 'file';
+        const uuid = crypto.randomUUID();
+        const path = `${user.id}/voice_note/${uuid}.${ext}`;
+        const { data, error } = await supabase.storage.from('app-files').upload(path, fileBlob);
+        if (!error && data) {
+          setUploadedFilePath(data.path);
+        }
+      }
+
+      if (fileBlob) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const base64Data = (e.target?.result as string).split(',')[1];
+          const result = await generateNotesFromFile(base64Data, fileBlob.type, languageName);
+          setNotes(result || 'Failed to generate notes.');
+          setIsGenerating(false);
+        };
+        reader.readAsDataURL(fileBlob);
+      }
     } catch (error) {
       console.error(error);
-      setNotes('Sorry, an error occurred while transcribing the audio.');
+      setNotes('Sorry, an error occurred while generating notes.');
       setIsGenerating(false);
     }
   };
 
-  const clearAudio = () => {
-    setAudioBlob(null);
-    setAudioUrl(null);
+  const clearFile = () => {
+    setFileBlob(null);
+    setFileUrl(null);
+    setUploadedFilePath(null);
     setNotes('');
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSave = async () => {
+    if (!user || !notes) return;
+    setIsSaving(true);
+    try {
+      const title = `Voice Note: ${new Date().toLocaleString()}`;
+      await createSavedItem(user.id, 'voice_note', title, notes, uploadedFilePath || undefined);
+      showAlert('Voice note saved successfully!');
+    } catch (error) {
+      console.error('Error saving voice note:', error);
+      showAlert('Failed to save voice note.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -149,7 +194,7 @@ export const VoiceToNotes: React.FC = () => {
           <Mic className="w-8 h-8 text-gray-300" />
         </motion.div>
         <h1 className="text-3xl font-heading font-bold text-white">Voice-to-Notes</h1>
-        <p className="text-gray-400">Record lectures or upload audio to get perfectly structured notes.</p>
+        <p className="text-gray-400">Record lectures or upload audio, video, or documents to get perfectly structured notes.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -172,7 +217,7 @@ export const VoiceToNotes: React.FC = () => {
                   <div className="text-2xl font-mono text-white font-bold">{formatTime(recordingTime)}</div>
                   <p className="text-red-400 animate-pulse font-medium">Recording Lecture...</p>
                 </div>
-              ) : audioUrl ? (
+              ) : fileUrl ? (
                 <div className="w-full space-y-4">
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex items-center gap-3">
@@ -180,18 +225,23 @@ export const VoiceToNotes: React.FC = () => {
                         <Play className="w-5 h-5 text-emerald-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">Audio Ready</p>
-                        <p className="text-xs text-gray-500">{(audioBlob?.size || 0) / 1024 / 1024 < 1 ? `${Math.round((audioBlob?.size || 0) / 1024)} KB` : `${((audioBlob?.size || 0) / 1024 / 1024).toFixed(2)} MB`}</p>
+                        <p className="text-sm font-medium text-white">File Ready</p>
+                        <p className="text-xs text-gray-500">{(fileBlob?.size || 0) / 1024 / 1024 < 1 ? `${Math.round((fileBlob?.size || 0) / 1024)} KB` : `${((fileBlob?.size || 0) / 1024 / 1024).toFixed(2)} MB`}</p>
                       </div>
                     </div>
                     <button 
-                      onClick={clearAudio}
+                      onClick={clearFile}
                       className="p-2 text-gray-500 hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
-                  <audio src={audioUrl} controls className="w-full h-10" />
+                  {fileBlob?.type.startsWith('audio/') && (
+                    <audio src={fileUrl} controls className="w-full h-10" />
+                  )}
+                  {fileBlob?.type.startsWith('video/') && (
+                    <video src={fileUrl} controls className="w-full h-40 rounded-lg bg-black/20" />
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center space-y-6 w-full">
@@ -208,7 +258,7 @@ export const VoiceToNotes: React.FC = () => {
                       type="file" 
                       ref={fileInputRef} 
                       className="hidden" 
-                      accept="audio/*"
+                      accept="audio/*,video/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={handleFileUpload}
                     />
                     <Button 
@@ -217,7 +267,7 @@ export const VoiceToNotes: React.FC = () => {
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      Upload Audio File
+                      Upload File
                     </Button>
                   </div>
                 </div>
@@ -228,12 +278,12 @@ export const VoiceToNotes: React.FC = () => {
               <Button 
                 className="w-full bg-white text-black hover:bg-gray-200 border-none"
                 onClick={handleGenerate}
-                disabled={isGenerating || !audioBlob || isRecording}
+                disabled={isGenerating || !fileBlob || isRecording}
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Transcribing...
+                    Generating...
                   </>
                 ) : (
                   <>
@@ -257,17 +307,28 @@ export const VoiceToNotes: React.FC = () => {
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-glass">
               <h3 className="font-heading font-semibold text-white">Lecture Notes</h3>
               {notes && (
-                <Button 
-                  variant="ghost" 
-                  className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
-                  onClick={() => {
-                    navigator.clipboard.writeText(notes);
-                    showAlert('Copied to clipboard!');
-                  }}
-                >
-                  <Copy className="w-3 h-3 mr-1" />
-                  Copy
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                    onClick={() => {
+                      navigator.clipboard.writeText(notes);
+                      showAlert('Copied to clipboard!');
+                    }}
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Copy
+                  </Button>
+                </div>
               )}
             </div>
             

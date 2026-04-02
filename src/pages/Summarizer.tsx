@@ -1,24 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { FileText, Upload, Type, Loader2, Sparkles, Copy } from 'lucide-react';
+import { FileText, Upload, Type, Loader2, Sparkles, Copy, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAppStore } from '../store/useAppStore';
+import { useAuth } from '../contexts/AuthContext';
+import { createSavedItem } from '../services/savedItems';
 import { analyzeDocumentStream, generateCompletionStream } from '../services/ai';
+import { supabase } from '../supabaseClient';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
 
 export const Summarizer: React.FC = () => {
   const { t } = useTranslation();
-  const { useCredits, addRecentTool, showAlert, language } = useAppStore();
+  const { plan, useCredits, addRecentTool, showAlert, language } = useAppStore();
+  const { user } = useAuth();
   
   const [mode, setMode] = useState<'text' | 'pdf'>('text');
   const [summaryType, setSummaryType] = useState<'quick' | 'deep'>('quick');
   const [textInput, setTextInput] = useState('');
-  const [selectedFile, setSelectedFile] = useState<{ name: string; data: string; mimeType: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; data: string; mimeType: string; rawFile?: File } | null>(null);
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [summary, setSummary] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,8 +51,10 @@ export const Summarizer: React.FC = () => {
       setSelectedFile({
         name: file.name,
         data: base64Data,
-        mimeType: file.type
+        mimeType: file.type,
+        rawFile: file
       });
+      setUploadedFilePath(null);
     };
     reader.readAsDataURL(file);
   };
@@ -76,8 +84,18 @@ export const Summarizer: React.FC = () => {
     try {
       let stream;
       if (mode === 'pdf' && selectedFile) {
+        if (selectedFile.rawFile && user && !uploadedFilePath) {
+          const ext = selectedFile.name.split('.').pop();
+          const uuid = crypto.randomUUID();
+          const path = `${user.id}/summarizer/${uuid}.${ext}`;
+          const { data, error } = await supabase.storage.from('app-files').upload(path, selectedFile.rawFile);
+          if (!error && data) {
+            setUploadedFilePath(data.path);
+          }
+        }
         stream = analyzeDocumentStream(selectedFile.data, selectedFile.mimeType, prompt, [], languageName);
       } else {
+        setUploadedFilePath(null);
         stream = generateCompletionStream(`${prompt}\n\nContent:\n${textInput}`, [], languageName);
       }
 
@@ -89,6 +107,23 @@ export const Summarizer: React.FC = () => {
       setSummary('Sorry, an error occurred while generating the summary.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user || !summary) return;
+    setIsSaving(true);
+    try {
+      const title = mode === 'text' 
+        ? textInput.substring(0, 30) + '...' 
+        : selectedFile?.name || 'Document Summary';
+      await createSavedItem(user.id, 'summary', title, summary, uploadedFilePath || undefined);
+      showAlert('Summary saved successfully!');
+    } catch (error) {
+      console.error('Error saving summary:', error);
+      showAlert('Failed to save summary.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -185,15 +220,25 @@ export const Summarizer: React.FC = () => {
                 <div className="text-xs opacity-80">Brief overview of main points</div>
               </button>
               <button
-                onClick={() => setSummaryType('deep')}
+                onClick={() => {
+                  if (plan === 'free') {
+                    showAlert('Upgrade to Pro to use Deep Academic mode.');
+                    return;
+                  }
+                  setSummaryType('deep');
+                }}
                 className={cn(
                   "py-3 px-4 rounded-xl text-sm font-medium transition-all border text-left",
                   summaryType === 'deep' 
                     ? "bg-white/10 border-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]" 
-                    : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20"
+                    : "bg-bg-primary border-border-glass text-gray-400 hover:border-white/20",
+                  plan === 'free' && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <div className="font-semibold mb-1 text-white">Deep Academic</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-semibold text-white">Deep Academic</div>
+                  {plan === 'free' && <span className="text-[10px] font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white px-1.5 py-0.5 rounded">PRO</span>}
+                </div>
                 <div className="text-xs opacity-80">Structured notes with tips</div>
               </button>
             </div>
@@ -233,17 +278,28 @@ export const Summarizer: React.FC = () => {
             <h3 className="font-heading font-semibold text-white">Generated Notes</h3>
             <div className="flex items-center gap-2">
               {summary && (
-                <Button 
-                  variant="ghost" 
-                  className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
-                  onClick={() => {
-                    navigator.clipboard.writeText(summary);
-                    showAlert('Copied to clipboard!');
-                  }}
-                >
-                  <Copy className="w-3 h-3 mr-1" />
-                  Copy
-                </Button>
+                <>
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10"
+                    onClick={() => {
+                      navigator.clipboard.writeText(summary);
+                      showAlert('Copied to clipboard!');
+                    }}
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Copy
+                  </Button>
+                </>
               )}
               {summary && (
                 <span className="text-xs px-2 py-1 rounded bg-white/10 text-gray-300 border border-white/20">
