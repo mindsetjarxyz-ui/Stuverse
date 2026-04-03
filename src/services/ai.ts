@@ -1,9 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
 const getAiInstance = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
-                 (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || 
-                 '';
+  const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
   return new GoogleGenAI({ apiKey });
 };
 
