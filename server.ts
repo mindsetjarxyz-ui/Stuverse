@@ -1,6 +1,5 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -9,11 +8,6 @@ import cors from 'cors';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -21,6 +15,11 @@ async function startServer() {
   // Regular JSON parsing for other routes
   app.use(express.json());
   app.use(cors());
+
+  // API routes FIRST
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', hasKey: !!process.env.GEMINI_API_KEY });
+  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
